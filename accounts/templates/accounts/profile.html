@@ -3716,7 +3716,7 @@ function renderMiniList(containerId, items, metaFn) {
 
     function moveNoteCompact(noteId, newDate, oldDate, noteTime){
         var payload = {id: noteId, date: newDate};
-        payload.time = noteTime || new Date().toTimeString().slice(0,5);
+        payload.time = noteTime || null;
         fetch('/accounts/api/calendar/note/', {
             method: 'PATCH',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
@@ -4162,7 +4162,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
     // ── Move note (drag & drop) ────────────────────────────────
     function moveNote(noteId, newDate, oldDate, noteTime){
         var payload = {id: noteId, date: newDate};
-        payload.time = noteTime || new Date().toTimeString().slice(0,5);
+        payload.time = noteTime || null;
         fetch('/accounts/api/calendar/note/', {
             method: 'PATCH',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
@@ -4175,6 +4175,16 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
                 else if (_fsSel === newDate){ fsselectDay(newDate); }
             }
         });
+    }
+
+    function _askMinutesForWeekDrop(defaultMinute){
+        var raw = prompt('Введите минуты для нового времени (00-59):', defaultMinute);
+        if (raw === null) return null;
+        raw = String(raw).trim();
+        if (!/^\d{1,2}$/.test(raw)) return false;
+        var n = parseInt(raw, 10);
+        if (isNaN(n) || n < 0 || n > 59) return false;
+        return (n < 10 ? '0' : '') + n;
     }
 
     // ── Note add (fullscreen) ─────────────────────────────────
@@ -4312,7 +4322,22 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
                 e.preventDefault(); el.classList.remove('drop-target');
                 if (_fsDragNote){
                     var nd = el.getAttribute('data-key');
-                    if (nd !== _fsDragNote.fromDate) moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, _fsDragNote.noteTime);
+                    if (nd !== _fsDragNote.fromDate){
+                        var hourRaw = el.getAttribute('data-hour');
+                        var hourNum = parseInt(hourRaw, 10);
+                        var hh = (isNaN(hourNum) ? 0 : Math.max(0, Math.min(23, hourNum)));
+                        var hhStr = (hh < 10 ? '0' : '') + hh;
+                        var defaultMinute = ((_fsDragNote.noteTime || '').split(':')[1] || '00');
+                        var mm = _askMinutesForWeekDrop(defaultMinute);
+                        if (mm === false){
+                            alert('Минуты должны быть числом от 00 до 59.');
+                            _fsDragNote = null;
+                            return;
+                        }
+                        if (mm !== null){
+                            moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, hhStr + ':' + mm);
+                        }
+                    }
                     _fsDragNote = null;
                     setTimeout(renderFsWeek, 350);
                 }
