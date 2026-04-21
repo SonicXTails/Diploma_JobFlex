@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}JobFlex — Профиль администратора{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'accounts/css/admin-profile.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn-link" href="{% url 'accounts:admin_panel' %}">🛡 Панель</a>
+<a class="btn-link" href="/admin/">🛠 Django Admin</a>
+<a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
+{% endblock %}
+
+{% block content %}
+<main class="ap-page">
+    <div class="ap-card">
+        <div class="ap-avatar">👤</div>
+
+        <h1 class="ap-title">{{ request.user.get_full_name|default:request.user.username }}</h1>
+        <div class="ap-badge">🔑 Администратор</div>
+
+        <div class="ap-fields">
+            <div>
+                <div class="ap-field__label">Имя пользователя</div>
+                <div class="ap-field__value">{{ request.user.username }}</div>
+            </div>
+            <div>
+                <div class="ap-field__label">Email</div>
+                <div class="ap-field__value">
+                    {% if request.user.email %}
+                        {{ request.user.email }}
+                    {% else %}
+                        <span class="muted">не указан</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if request.user.first_name or request.user.last_name %}
+            <div>
+                <div class="ap-field__label">Полное имя</div>
+                <div class="ap-field__value">{{ request.user.get_full_name }}</div>
+            </div>
+            {% endif %}
+            <div>
+                <div class="ap-field__label">Дата регистрации</div>
+                <div class="ap-field__value">{{ request.user.date_joined|date:"d.m.Y" }}</div>
+            </div>
+            <div>
+                <div class="ap-field__label">Последний вход</div>
+                <div class="ap-field__value">
+                    {% if request.user.last_login %}
+                        {{ request.user.last_login|date:"d.m.Y H:i" }}
+                    {% else %}
+                        <span class="muted">нет данных</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <hr class="ap-divider">
+
+        <div class="ap-actions">
+            <a href="{% url 'accounts:admin_panel' %}" class="btn-primary">← Панель администратора</a>
+            <a href="/admin/auth/user/{{ request.user.pk }}/change/" class="btn-outline">✏️ Редактировать</a>
+        </div>
+    </div>
+
+</main>
+{% endblock %}

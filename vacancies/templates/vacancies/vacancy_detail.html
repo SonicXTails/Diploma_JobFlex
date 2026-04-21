@@ -1,0 +1,875 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — {{ vacancy.title }}</title>
+    <link rel="icon" type="image/png" href="{% static 'vacancies/logo.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'vacancies/logo.png' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    {% if map_lat and map_lon or geocode_query %}
+    <link rel="preconnect" href="https://mapgl.2gis.com">
+    <link rel="preconnect" href="https://catalog.api.2gis.com">
+    <link rel="preload" href="https://mapgl.2gis.com/api/js/v1" as="script">
+    {% endif %}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function(){
+            try {
+                var s = localStorage.getItem('site_theme');
+                if (s === 'dark' || (!s && window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches))
+                    document.documentElement.classList.add('theme-dark');
+            } catch(e){}
+        })();
+    </script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'vacancies/css/vacancy-detail.css' %}">
+    {% if not prefetched_rating %}
+    <script>
+    /* Early-fire rating fetch so it runs in parallel with DOM parsing */
+    var _hhId = '{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id|escapejs }}{% endif %}';
+    if (!_hhId) try { _hhId = '{{ vacancy.raw_json.employer.id|default:""|escapejs }}'; } catch(e){}
+    var _ratingPromise = _hhId ? fetch('/api/employer-rating/' + encodeURIComponent(_hhId) + '/') : null;
+    </script>
+    {% endif %}
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                {% if user.is_authenticated %}
+                    <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+                {% else %}
+                    <a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+                {% endif %}
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container container--wide">
+        <nav class="breadcrumb" aria-label="Навигация">
+            <a href="{% url 'vacancy-list' %}">← Все вакансии</a>
+            <span class="breadcrumb-sep">›</span>
+            <span>{{ vacancy.title }}</span>
+        </nav>
+
+        <div class="detail-layout">
+
+            <!-- ═══════════════════════════ MAIN COLUMN ═══════════════════════════ -->
+            <div class="detail-main">
+
+                {% if not vacancy.is_active %}
+                <div class="vd-archived-note">
+                    <span class="vd-archived-note-icon">📦</span>
+                    <div>
+                        <div class="vd-archived-note-title">Вакансия закрыта</div>
+                        <div class="vd-archived-note-sub">Эта вакансия была снята с публикации и больше не принимает отклики.</div>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="vd-hero">
+                    <div class="vd-hero-top">
+                        {% if employer_logo_url %}
+                            <img class="vd-logo" src="{{ employer_logo_url }}" alt="{{ vacancy.company }}" loading="lazy">
+                        {% else %}
+                            <div class="vd-logo-placeholder">{{ vacancy.company|first|upper }}</div>
+                        {% endif %}
+                        <div class="vd-hero-info">
+                            <h1 class="vd-title">{{ vacancy.title }}</h1>
+                            {% if vacancy.url %}
+                                <a class="vd-company" href="{{ vacancy.url }}" target="_blank" rel="noopener">{{ vacancy.company }}</a>
+                            {% else %}
+                                <span class="vd-company vd-company-static">{{ vacancy.company }}</span>
+                            {% endif %}
+                            {% if display_address %}
+                                <div class="vd-location">📍 {{ display_address }}</div>
+                            {% elif vacancy.region %}
+                                <div class="vd-location">📍 {{ vacancy.region }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Salary -->
+                    {% with from=vacancy.salary_from to=vacancy.salary_to cur=vacancy.salary_currency %}
+                    {% if from or to %}
+                        <div class="vd-salary">
+                            {% if from and to %}
+                                {{ from|floatformat:0 }}&nbsp;—&nbsp;{{ to|floatformat:0 }}
+                            {% elif from %}
+                                от {{ from|floatformat:0 }}
+                            {% else %}
+                                до {{ to|floatformat:0 }}
+                            {% endif %}
+                            {% if cur %}<span class="vd-salary-currency">{{ cur }}</span>{% endif %}
+                            {% with gross=vacancy.raw_json.salary.gross %}
+                            <div class="vd-salary-gross">{% if gross %}до вычета налогов{% else %}на руки{% endif %}</div>
+                            {% endwith %}
+                        </div>
+                    {% else %}
+                        <div class="vd-salary-none">Зарплата не указана</div>
+                    {% endif %}
+                    {% endwith %}
+
+                    <!-- Badges -->
+                    <div class="vd-badges">
+                        {% if vacancy.is_remote %}
+                            <span class="vd-badge vd-badge--green">🏠 Удалённо</span>
+                        {% elif vacancy.is_hybrid %}
+                            <span class="vd-badge vd-badge--accent">🔄 Гибрид</span>
+                        {% else %}
+                            <span class="vd-badge">🏢 Офис</span>
+                        {% endif %}
+                        {% if vacancy.experience_name %}
+                            <span class="vd-badge vd-badge--accent">{{ vacancy.experience_name }}</span>
+                        {% endif %}
+                        {% if vacancy.schedule_name %}
+                            <span class="vd-badge">{{ vacancy.schedule_name }}</span>
+                        {% endif %}
+                        {% if vacancy.employment_name %}
+                            <span class="vd-badge">{{ vacancy.employment_name }}</span>
+                        {% endif %}
+                        {% if vacancy.is_internship %}
+                            <span class="vd-badge vd-badge--green">Стажировка</span>
+                        {% endif %}
+                        {% if vacancy.accept_temporary %}
+                            <span class="vd-badge">Временная занятость</span>
+                        {% endif %}
+                    </div>
+                </div><!-- /.vd-hero -->
+
+                <!-- Description card (lazy-loaded) -->
+                <div class="vd-card" id="desc-card">
+                    <h2 class="vd-card-title">Описание вакансии</h2>
+                    <div id="desc-body">
+                        {% if vacancy.branded_description %}
+                            {# iframe = full style isolation: employer <style> tags cannot leak #}
+                            <iframe class="branded-frame"
+                                    id="branded-frame"
+                                    srcdoc="{{ branded_srcdoc }}"
+                                    scrolling="no"
+                                    sandbox="allow-scripts allow-same-origin"
+                                    loading="lazy"
+                            ></iframe>
+                        {% elif vacancy.description %}
+                            <div class="vd-description">{{ vacancy.description|safe }}</div>
+                        {% else %}
+                            <!-- skeleton shown until JS loads real content -->
+                            <div class="skeleton-wrap" id="desc-skeleton">
+                                <div class="skeleton-line h-tall w-full"></div>
+                                <div class="skeleton-line w-full"></div>
+                                <div class="skeleton-line w-90"></div>
+                                <div class="skeleton-line w-75"></div>
+                                <div class="skeleton-line w-full"></div>
+                                <div class="skeleton-line w-60"></div>
+                                <div class="skeleton-line w-40"></div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Key skills card -->
+                {% with skills=vacancy.raw_json.key_skills %}
+                {% if skills %}
+                <div class="vd-card">
+                    <h2 class="vd-card-title">Ключевые навыки</h2>
+                    <div class="skills-cloud">
+                        {% for skill in skills %}
+                            <span class="skill-chip">{{ skill.name }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <!-- Map card -->
+                {% if display_address or map_lat and map_lon or geocode_query %}
+                <div class="vd-card">
+                    <h2 class="vd-card-title">Местоположение</h2>
+                    {% if display_address %}
+                        <p class="vd-map-address">
+                            📍 {{ display_address }}
+                        </p>
+                    {% endif %}
+                    {% if map_lat and map_lon or geocode_query %}
+                        <div id="map"></div>
+                        <div class="route-panel" id="route-panel">
+                            <label for="from-address">Откуда вы поедете?</label>
+                            <div class="route-input-wrap">
+                                <input type="text" id="from-address" placeholder="Введите адрес или кликните по карте" autocomplete="off">
+                                <div id="suggest-list"></div>
+                                <button class="btn-primary vd-route-btn" id="btn-route" onclick="buildRoute()">🚗 Маршрут</button>
+                                <button class="btn vd-route-clear-btn" id="btn-clear" onclick="clearRoute()">✕ Сбросить</button>
+                                <a class="btn-primary vd-2gis-btn" id="link-2gis" target="_blank" rel="noopener">📍 2ГИС</a>
+                            </div>
+                            <p class="route-hint">Кликните по карте, чтобы задать точку отправления, или введите адрес.</p>
+                            <div id="route-status"></div>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            </div><!-- /.detail-main -->
+
+            <!-- ═══════════════════════════ SIDEBAR ═══════════════════════════ -->
+            <aside class="detail-sidebar">
+
+                {% if user.is_authenticated %}
+                <div class="sidebar-card vd-bookmark-card">
+                    <button class="btn-bookmark{% if is_bookmarked %} is-bookmarked{% endif %}"
+                            id="btn-bookmark"
+                            data-vacancy-id="{{ vacancy.pk }}"
+                            data-bookmarked="{% if is_bookmarked %}1{% else %}0{% endif %}">
+                        <span id="bookmark-icon">{% if is_bookmarked %}★{% else %}☆{% endif %}</span>
+                        <span id="bookmark-label">{% if is_bookmarked %}Сохранено{% else %}Сохранить{% endif %}</span>
+                    </button>
+                </div>
+                {% endif %}
+
+                {% if vacancy.is_hh %}
+                {# ── HH.ru vacancy: only external apply link ── #}
+                <div class="sidebar-card">
+                    <a class="btn-apply" href="{{ vacancy.url }}" target="_blank" rel="noopener">
+                        Откликнуться на hh.ru ↗
+                    </a>
+                    <p class="vd-side-note">
+                        Откроется на сайте hh.ru
+                    </p>
+                </div>
+                {% else %}
+                {# ── Site vacancy: applicant can apply here ── #}
+                {% if is_applicant %}
+                <div class="sidebar-card" id="apply-card">
+                    {% if not vacancy.is_active %}
+                        <div class="apply-status apply-status--archived">📦 Вакансия в архиве</div>
+                        <p class="vd-side-note vd-side-note--tight">Отклики не принимаются</p>
+                    {% elif user_is_creator %}
+                        <div class="apply-status apply-status--owner">📋 Это ваша вакансия</div>
+                    {% elif user_application %}
+                        {% if user_application.status == 'pending' %}
+                            <div class="apply-status apply-status--pending">⏳ Отклик отправлен</div>
+                        {% elif user_application.status == 'viewed' %}
+                            <div class="apply-status apply-status--viewed">👁 Отклик просмотрен</div>
+                        {% elif user_application.status == 'accepted' %}
+                            <div class="apply-status apply-status--accepted">✅ Приглашение!</div>
+                        {% elif user_application.status == 'rejected' %}
+                            <div class="apply-status apply-status--rejected">❌ Отклонено</div>
+                        {% endif %}
+                        <p class="vd-side-note vd-side-note--tight">
+                            {{ user_application.created_at|date:"d.m.Y" }}
+                        </p>
+                    {% else %}
+                        <button class="btn-apply" id="btn-apply-site">
+                            Откликнуться на сайте
+                        </button>
+                        <p class="vd-side-note">
+                            Отклик получит работодатель
+                        </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endif %}
+
+                {% if application_count %}
+                <div class="sidebar-card vd-centered-card">
+                    <a href="{% url 'accounts:vacancy_applications' vacancy.pk %}"
+                       class="vd-accent-link">
+                        👥 Откликнулись: {{ application_count }}
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if is_owner %}
+                <div class="sidebar-card vd-owner-actions">
+                    <a href="{% url 'vacancy-edit' vacancy.pk %}"
+                       class="vd-owner-btn vd-owner-btn--accent">
+                        ✏️ Редактировать
+                    </a>
+                    <a href="{% url 'my-vacancies' %}"
+                       class="vd-owner-btn vd-owner-btn--ghost">
+                        📄 Мои вакансии
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Employer card -->
+                <div class="sidebar-card">
+                    <p class="sidebar-label">Работодатель</p>
+                    <div class="emp-logo-wrap">
+                        {% if employer_logo_url %}
+                            <img src="{{ employer_logo_url }}" alt="{{ vacancy.company }}">
+                        {% else %}
+                            <div class="emp-logo-letter">{{ vacancy.company|first|upper }}</div>
+                        {% endif %}
+                        <div>
+                            <div class="emp-name">{{ vacancy.company }}</div>
+                            {% if vacancy.region %}<div class="emp-region">{{ vacancy.region }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="vd-rating-label">Рейтинг работодателя:</div>
+                    <div class="vd-rating-wrap" id="emp-rating">
+                        {% if prefetched_rating %}
+                        <span class="rating-none">{{ prefetched_rating }}</span>
+                        {% else %}
+                        <span class="rating-none">загружается…</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Vacancy meta card -->
+                <div class="sidebar-card">
+                    <p class="sidebar-label">Детали</p>
+                    <div class="sidebar-dl">
+                        {% if vacancy.published_at %}
+                        <div class="sidebar-dl-row">
+                            <dt>Дата</dt>
+                            <dd>{{ vacancy.published_at|date:"d.m.Y" }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if vacancy.experience_name %}
+                        <div class="sidebar-dl-row">
+                            <dt>Опыт</dt>
+                            <dd>{{ vacancy.experience_name }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if vacancy.schedule_name %}
+                        <div class="sidebar-dl-row">
+                            <dt>График</dt>
+                            <dd>{{ vacancy.schedule_name }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if vacancy.employment_name %}
+                        <div class="sidebar-dl-row">
+                            <dt>Занятость</dt>
+                            <dd>{{ vacancy.employment_name }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if vacancy.employment_form_name %}
+                        <div class="sidebar-dl-row">
+                            <dt>Форма</dt>
+                            <dd>{{ vacancy.employment_form_name }}</dd>
+                        </div>
+                        {% endif %}
+                        <div class="sidebar-dl-row">
+                            <dt>Формат</dt>
+                            <dd>{{ vacancy.work_formats_display }}</dd>
+                        </div>
+                        {% if vacancy.accept_incomplete_resumes %}
+                        <div class="sidebar-dl-row vd-dl-row-spaced">
+                            <dt></dt>
+                            <dd class="vd-accent-note">✓ Принимают неполное резюме</dd>
+                        </div>
+                        {% endif %}
+                        {% if vacancy.accept_kids %}
+                        <div class="sidebar-dl-row">
+                            <dt></dt>
+                            <dd class="vd-accent-note">✓ Можно с детьми</dd>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </aside>
+        </div><!-- /.detail-layout -->
+    </main>
+
+    <script src="{% static 'vacancies/js/theme.js' %}"></script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+
+    <script>
+    /* ── iframe branded-description height auto-resize ─── */
+    (function() {
+        var _rTimer = null;
+        window.addEventListener('message', function(e) {
+            if (!e.data || e.data.type !== 'branded-height') return;
+            var h = e.data.height;
+            if (!h || h < 10) return;
+            clearTimeout(_rTimer);
+            _rTimer = setTimeout(function() {
+                var frame = document.getElementById('branded-frame');
+                if (frame) frame.style.height = (h + 4) + 'px';
+            }, 50);
+        });
+    })();
+    </script>
+
+    {% if map_lat and map_lon or geocode_query %}
+    <script src="https://mapgl.2gis.com/api/js/v1" async></script>
+    <script src="https://unpkg.com/@2gis/mapgl-directions@^2/dist/directions.js" async></script>
+    {% endif %}
+
+    <script>
+    /* ── Employer star rating ─────────────────────────── */
+    (function(){
+        function renderStars(val) {
+            var r = parseFloat(val);
+            if (isNaN(r) || r === 0) return '<span class="rating-none">(Рейтинга нет)</span>';
+            r = Math.max(0, Math.min(5, r));
+            var n = Math.round(r);
+            var c = r >= 4 ? 'green' : r >= 2.5 ? 'orange' : 'red';
+            var h = '<span class="star-rating clr-' + c + '">';
+            for (var i = 1; i <= 5; i++) {
+                h += '<span class="star ' + (i <= n ? 'filled' : 'empty') + '"></span>';
+            }
+            h += '</span><span class="rating-value clr-' + c + '">' + r.toFixed(1) + '</span>';
+            return h;
+        }
+
+        var el = document.getElementById('emp-rating');
+
+        {% if prefetched_rating %}
+        /* Rating was resolved server-side — render instantly, no AJAX */
+        el.innerHTML = renderStars('{{ prefetched_rating }}');
+        {% else %}
+        /* Use early-fired fetch promise from <head> */
+        var hhId = (typeof _hhId !== 'undefined') ? _hhId : '';
+        if (!hhId) { el.innerHTML = '<span class="rating-none">(Рейтинга нет)</span>'; return; }
+
+        var _ratingRetries = 0;
+        function fetchRating(promise) {
+            (promise || fetch('/api/employer-rating/' + encodeURIComponent(hhId) + '/'))
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.rating) {
+                        el.innerHTML = renderStars(d.rating);
+                    } else if (d.pending && _ratingRetries < 5) {
+                        _ratingRetries++;
+                        setTimeout(function(){ fetchRating(); }, 3000);
+                    } else {
+                        el.innerHTML = '<span class="rating-none">(Рейтинга нет)</span>';
+                    }
+                })
+                .catch(function(){ el.innerHTML = '<span class="rating-none">(Рейтинга нет)</span>'; });
+        }
+        fetchRating(_ratingPromise);
+        {% endif %}
+    })();
+
+    {% if map_lat and map_lon or geocode_query %}
+    /* ── 2GIS Map & routing ───────────────────────────── */
+    (function(){
+        var apiKey   = '{{ dgis_api_key|escapejs }}';
+        var destLat, destLon;
+        var fromLat = null, fromLon = null;
+        var currentMap, destMarker, fromMarker, directions;
+        var suggestTimer = null;
+
+        /* Wait for async mapgl script to load */
+        function whenMapglReady(cb) {
+            if (typeof mapgl !== 'undefined' && mapgl.Map) { cb(); return; }
+            var _t = setInterval(function() {
+                if (typeof mapgl !== 'undefined' && mapgl.Map) { clearInterval(_t); cb(); }
+            }, 100);
+        }
+
+        function initMap(lat, lon) {
+            destLat = lat; destLon = lon;
+            currentMap = new mapgl.Map('map', { center: [lon, lat], zoom: 14, key: apiKey });
+            destMarker = new mapgl.Marker(currentMap, { coordinates: [lon, lat] });
+            document.getElementById('route-panel').style.display = 'block';
+
+            /* Immediately show 2ГИС button: from=user text, to=dest coordinates */
+            if (_userLocationStr) {
+                var _link2 = document.getElementById('link-2gis');
+                _link2.href = 'https://2gis.ru/directions/points/' +
+                    encodeURIComponent(_userLocationStr) + ';' +
+                    encodeURIComponent(lon + ',' + lat);
+                _link2.style.display = 'inline-flex';
+            }
+
+            /* Try to pre-place the user's saved location as the "from" point */
+            prefillUserLocation();
+
+            currentMap.on('click', function(e) {
+                setFromPoint(e.lngLat[1], e.lngLat[0]);
+                /* Reverse-geocode the click */
+                fetch('https://catalog.api.2gis.com/3.0/items/geocode?lon=' +
+                      e.lngLat[0] + '&lat=' + e.lngLat[1] +
+                      '&fields=items.full_name&key=' + apiKey)
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var items = (d.result && d.result.items) || [];
+                        document.getElementById('from-address').value =
+                            (items.length && items[0].full_name) ? items[0].full_name
+                                : (e.lngLat[1].toFixed(5) + ', ' + e.lngLat[0].toFixed(5));
+                    }).catch(function(){
+                        document.getElementById('from-address').value =
+                            e.lngLat[1].toFixed(5) + ', ' + e.lngLat[0].toFixed(5);
+                    });
+            });
+        }
+
+        function setFromPoint(lat, lon) {
+            fromLat = lat; fromLon = lon;
+            if (fromMarker) fromMarker.destroy();
+            fromMarker = new mapgl.Marker(currentMap, {
+                coordinates: [lon, lat],
+                icon: 'https://docs.2gis.com/img/mapgl/marker.svg'
+            });
+            update2gisLink();
+        }
+
+        function update2gisLink() {
+            var link = document.getElementById('link-2gis');
+            if (fromLat !== null && destLat !== null) {
+                link.href = 'https://2gis.ru/directions/points/' +
+                    encodeURIComponent(fromLon + ',' + fromLat) + ';' +
+                    encodeURIComponent(destLon + ',' + destLat);
+                link.style.display = 'inline-flex';
+            }
+        }
+
+        /* Address suggest */
+        var suggestBox = document.getElementById('suggest-list');
+        var addrInput  = document.getElementById('from-address');
+
+        addrInput.addEventListener('input', function(){
+            clearTimeout(suggestTimer);
+            var q = this.value.trim();
+            if (q.length < 3) { suggestBox.style.display = 'none'; return; }
+            suggestTimer = setTimeout(function(){
+                fetch('https://catalog.api.2gis.com/3.0/items?q=' +
+                      encodeURIComponent(q) +
+                      '&fields=items.point&type=building,street,adm_div&key=' + apiKey)
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var items = (d.result && d.result.items) || [];
+                        suggestBox.innerHTML = '';
+                        if (!items.length) { suggestBox.style.display = 'none'; return; }
+                        items.slice(0, 6).forEach(function(it){
+                            var div = document.createElement('div');
+                            div.textContent = it.full_name || it.name || '';
+                            div.addEventListener('click', function(){
+                                addrInput.value = div.textContent;
+                                suggestBox.style.display = 'none';
+                                if (it.point) setFromPoint(it.point.lat, it.point.lon);
+                            });
+                            suggestBox.appendChild(div);
+                        });
+                        suggestBox.style.display = 'block';
+                        var rect = addrInput.getBoundingClientRect();
+                        suggestBox.style.width = rect.width + 'px';
+                        suggestBox.style.left  = addrInput.offsetLeft + 'px';
+                        suggestBox.style.top   = (addrInput.offsetTop + addrInput.offsetHeight) + 'px';
+                    }).catch(function(){ suggestBox.style.display = 'none'; });
+            }, 350);
+        });
+        document.addEventListener('click', function(e){
+            if (e.target !== addrInput) suggestBox.style.display = 'none';
+        });
+
+        /* Pre-place user's saved location as the "from" marker (no route drawn) */
+        var _userLocationStr = '{{ user_location_str|escapejs }}';
+        var _userMetroLat    = '{{ user_metro_lat|escapejs }}';
+        var _userMetroLon    = '{{ user_metro_lon|escapejs }}';
+        var _destStr         = '{{ geocode_query|escapejs }}';
+
+        function prefillUserLocation() {
+            if (!_userLocationStr) return;
+            document.getElementById('from-address').value = _userLocationStr;
+
+            if (_userMetroLat && _userMetroLon) {
+                /* Metro coordinates resolved server-side — instant */
+                setFromPoint(parseFloat(_userMetroLat), parseFloat(_userMetroLon));
+            } else {
+                /* Address: geocode via 2GIS */
+                fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
+                      encodeURIComponent(_userLocationStr) +
+                      '&fields=items.point&key=' + apiKey)
+                    .then(function(r){ return r.json(); })
+                    .then(function(gd){
+                        var items = (gd.result && gd.result.items) || [];
+                        if (items.length && items[0].point) {
+                            setFromPoint(items[0].point.lat, items[0].point.lon);
+                        }
+                    }).catch(function(){});
+            }
+        }
+
+        /* Build route */
+        window.buildRoute = function(){
+            var btn    = document.getElementById('btn-route');
+            var status = document.getElementById('route-status');
+            var input  = document.getElementById('from-address');
+            if (!destLat || !destLon) return;
+
+            /* Geocode typed address first if needed */
+            if (fromLat === null && input.value.trim().length >= 2) {
+                btn.disabled = true;
+                status.textContent = 'Ищем адрес…';
+                fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
+                      encodeURIComponent(input.value.trim()) +
+                      '&fields=items.point&key=' + apiKey)
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        var items = (d.result && d.result.items) || [];
+                        if (items.length && items[0].point) {
+                            setFromPoint(items[0].point.lat, items[0].point.lon);
+                            doRoute(status);
+                        } else {
+                            status.textContent = 'Адрес не найден.';
+                        }
+                        btn.disabled = false;
+                    }).catch(function(){ status.textContent = 'Ошибка поиска.'; btn.disabled = false; });
+                return;
+            }
+            if (fromLat === null) {
+                status.textContent = 'Укажите точку отправления: кликните по карте или введите адрес.';
+                return;
+            }
+            doRoute(status);
+        };
+
+        function doRoute(status) {
+            status.textContent = 'Строим маршрут…';
+            /* Try to get distance/time summary */
+            fetch('https://routing.api.2gis.com/routing/7.0.0/global?key=' + apiKey, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    points: [
+                        {type:'stop', lon:fromLon, lat:fromLat},
+                        {type:'stop', lon:destLon, lat:destLat}
+                    ],
+                    transport: 'driving', output: 'summary', locale: 'ru'
+                })
+            }).then(function(r){ return r.json(); })
+              .then(function(data){
+                var ri = data && data.result && data.result[0];
+                if (!ri) return;
+                var dist = typeof ri.length   === 'number' ? (ri.length  / 1000).toFixed(1) + ' км'  : '';
+                var dur  = typeof ri.duration === 'number' ? Math.max(1, Math.round(ri.duration / 60)) + ' мин' : '';
+                status.textContent = 'Маршрут: ' + [dist, dur].filter(Boolean).join(', ');
+              }).catch(function(){ /* summary not critical */ });
+
+            /* Draw route on map */
+            if (!directions) {
+                directions = new mapgl.Directions(currentMap, { directionsApiKey: apiKey });
+            } else {
+                try { directions.clear(); } catch(e){}
+            }
+            try {
+                directions.carRoute({ points: [[fromLon, fromLat], [destLon, destLat]] });
+                document.getElementById('btn-clear').style.display = 'inline-flex';
+            } catch(e) {
+                console.warn('carRoute failed', e);
+                status.textContent = 'Маршрут построен (визуализация недоступна)';
+            }
+            update2gisLink();
+        }
+
+        window.clearRoute = function(){
+            if (directions) try { directions.clear(); } catch(e){}
+            if (fromMarker)  { fromMarker.destroy(); fromMarker = null; }
+            fromLat = fromLon = null;
+            document.getElementById('from-address').value     = '';
+            document.getElementById('route-status').textContent = '';
+            document.getElementById('btn-clear').style.display  = 'none';
+            document.getElementById('link-2gis').style.display  = 'none';
+            currentMap.setCenter([destLon, destLat]);
+            currentMap.setZoom(14);
+        };
+
+        /* Initialise map (wait for async mapgl + visible on screen) */
+        function startMap(lat, lon) {
+            whenMapglReady(function() {
+                var mapEl = document.getElementById('map');
+                if (!mapEl) return;
+                /* Defer until map container is visible (IntersectionObserver) */
+                if ('IntersectionObserver' in window) {
+                    var obs = new IntersectionObserver(function(entries) {
+                        if (entries[0].isIntersecting) {
+                            obs.disconnect();
+                            initMap(lat, lon);
+                        }
+                    }, { rootMargin: '200px' });
+                    obs.observe(mapEl);
+                } else {
+                    initMap(lat, lon);
+                }
+            });
+        }
+        {% if map_lat and map_lon %}
+            startMap({{ map_lat }}, {{ map_lon }});
+        {% elif geocode_query %}
+            fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
+                  encodeURIComponent('{{ geocode_query|escapejs }}') +
+                  '&fields=items.point&key=' + apiKey)
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    var items = (d.result && d.result.items) || [];
+                    if (!items.length) {
+                        document.getElementById('map').innerHTML =
+                            '<p style="color:var(--text-secondary);font-size:14px;padding:16px 0">Не удалось определить местоположение.</p>';
+                        return;
+                    }
+                    startMap(items[0].point.lat, items[0].point.lon);
+                }).catch(function(){
+                    document.getElementById('map').innerHTML =
+                        '<p style="color:var(--text-secondary);font-size:14px;padding:16px 0">Ошибка геолокации.</p>';
+                });
+        {% endif %}
+    })();
+    {% endif %}
+    </script>
+
+    {% if not vacancy.branded_description and not vacancy.description %}
+    <script>
+    /* ── Lazy description loader ──────────────────────── */
+    (function() {
+        var MAX_POLLS = 20;
+        var pollCount = 0;
+        var delay = 400;  /* start fast, back off exponentially */
+        var descBody = document.getElementById('desc-body');
+
+        function renderDescription(data) {
+            if (data.branded) {
+                // Use iframe for branded content — full <style> isolation
+                var iframe = document.createElement('iframe');
+                iframe.className = 'branded-frame';
+                iframe.id = 'branded-frame';
+                iframe.src = '/' + vacancyId + '/branded/';
+                iframe.setAttribute('scrolling', 'no');
+                iframe.setAttribute('loading', 'lazy');
+                descBody.innerHTML = '';
+                descBody.appendChild(iframe);
+            } else if (data.description) {
+                descBody.innerHTML = '<div class="vd-description">' + data.description + '</div>';
+            } else {
+                descBody.innerHTML = '<p style="color:var(--text-secondary);font-style:italic;font-size:14px">' +
+                       'Описание не указано.</p>';
+            }
+        }
+
+        function showPendingNote() {
+            var skel = document.getElementById('desc-skeleton');
+            if (!skel) return;
+            var note = document.createElement('div');
+            note.className = 'desc-pending-note';
+            note.innerHTML = '<span class="desc-pending-dot"></span>Описание загружается…';
+            skel.after(note);
+        }
+
+        function poll() {
+            if (pollCount >= MAX_POLLS) {
+                descBody.innerHTML = '<p style="color:var(--text-secondary);font-style:italic;font-size:14px">' +
+                    'Не удалось загрузить описание. ' +
+                    '<a href="javascript:location.reload()" style="color:var(--accent)">Обновить страницу</a></p>';
+                return;
+            }
+            pollCount++;
+            fetch('/api/vacancy-description/{{ vacancy.pk }}/')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.pending) {
+                        if (pollCount === 1) showPendingNote();
+                        delay = Math.min(delay * 1.5, 5000);
+                        setTimeout(poll, delay);
+                    } else if (data.unavailable) {
+                        descBody.innerHTML = '<p style="color:var(--text-secondary);font-style:italic;font-size:14px">' +
+                            'Описание недоступно (вакансия снята с публикации или закрыта).</p>';
+                    } else {
+                        renderDescription(data);
+                    }
+                })
+                .catch(function() { setTimeout(poll, delay); });
+        }
+
+        poll(); // start immediately on page load
+    })();
+    </script>
+    {% endif %}
+
+    {% if is_applicant and not user_application and not user_is_creator %}
+    <!-- Apply modal -->
+    <div id="apply-modal-overlay">
+        <div id="apply-modal">
+            <h3>Отклик на вакансию</h3>
+            <p class="vd-apply-sub">{{ vacancy.title }} — {{ vacancy.company }}</p>
+            <textarea id="apply-cover" placeholder="Сопроводительное письмо (необязательно)…" maxlength="3000"></textarea>
+            <div class="apply-modal-actions">
+                <button class="btn" id="apply-cancel">Отмена</button>
+                <button class="btn-primary" id="apply-submit">Отправить отклик</button>
+            </div>
+            <div id="apply-error" class="vd-apply-error"></div>
+        </div>
+    </div>
+    <script>
+    (function(){
+        var overlay  = document.getElementById('apply-modal-overlay');
+        var btnOpen  = document.getElementById('btn-apply-site');
+        var btnClose = document.getElementById('apply-cancel');
+        var btnSend  = document.getElementById('apply-submit');
+        var errEl    = document.getElementById('apply-error');
+        var cover    = document.getElementById('apply-cover');
+
+        if (btnOpen) btnOpen.addEventListener('click', function(){ overlay.classList.add('open'); });
+        if (btnClose) btnClose.addEventListener('click', function(){ overlay.classList.remove('open'); });
+        overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.classList.remove('open'); });
+
+        btnSend.addEventListener('click', function(){
+            btnSend.disabled = true;
+            errEl.style.display = 'none';
+            fetch('{% url "accounts:api_apply" %}', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify({ vacancy_id: {{ vacancy.pk }}, cover_letter: cover.value.trim() })
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.ok) {
+                    overlay.classList.remove('open');
+                    var card = document.getElementById('apply-card');
+                    if (card) card.innerHTML = '<div class="apply-status apply-status--pending">⏳ Отклик отправлен</div>';
+                } else {
+                    btnSend.disabled = false;
+                    errEl.textContent = d.error === 'not_applicant' ? 'Нет прав для отклика.' : 'Ошибка отправки.';
+                    errEl.style.display = '';
+                }
+            })
+            .catch(function(){
+                btnSend.disabled = false;
+                errEl.textContent = 'Сетевая ошибка.';
+                errEl.style.display = '';
+            });
+        });
+    })();
+    </script>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+    <script>
+    (function(){
+        var btn = document.getElementById('btn-bookmark');
+        if (!btn) return;
+        btn.addEventListener('click', function(){
+            btn.disabled = true;
+            fetch('/accounts/api/bookmark/' + btn.dataset.vacancyId + '/', {
+                method: 'POST', credentials: 'same-origin',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}
+            }).then(function(r){ return r.json(); })
+              .then(function(d){
+                  btn.disabled = false;
+                  if (d.ok) {
+                      var saved = d.bookmarked;
+                      btn.classList.toggle('is-bookmarked', saved);
+                      document.getElementById('bookmark-icon').textContent  = saved ? '★' : '☆';
+                      document.getElementById('bookmark-label').textContent = saved ? 'Сохранено' : 'Сохранить';
+                  }
+              }).catch(function(){ btn.disabled = false; });
+        });
+    })();
+    </script>
+    {% endif %}
+    {% include 'includes/site_footer.html' %}
+</body>
+</html>

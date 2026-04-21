@@ -1,0 +1,242 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Соискатели</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function(){
+            try{
+                var key = 'site_theme';
+                var saved = localStorage.getItem(key);
+                if(saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches))
+                    document.documentElement.classList.add('theme-dark');
+            }catch(e){}
+        })();
+    </script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'accounts/css/applicant-list.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="{% url 'accounts:applicant_list' %}" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                {% if user.is_authenticated %}
+                    <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+                {% else %}
+                    <a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+                {% endif %}
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container container--wide">
+        <section class="filters">
+            <div class="filters-title">Поиск соискателей</div>
+            <form method="get" class="filters-grid">
+                <div class="field full">
+                    <label>Должность / специальность</label>
+                    <input type="text" name="q" value="{{ q }}" placeholder="Программист, Врач, Аналитик...">
+                </div>
+                <div class="field">
+                    <label>Город</label>
+                    <select name="city">
+                        <option value="">Все города</option>
+                        {% for c in city_options %}
+                            <option value="{{ c }}" {% if c == city %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Навыки</label>
+                    <input type="text" name="skills" value="{{ skills }}" placeholder="python, django, sql">
+                </div>
+                <div class="field">
+                    <label>Макс. зарплата (бюджет)</label>
+                    <div class="u-currency-wrap">
+                        <input type="number" name="salary_max" value="{{ salary_max }}" placeholder="100 000" min="0" step="1000" class="al-salary-input">
+                        <span class="u-currency-sign">₽</span>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Опыт работы</label>
+                    <select name="exp_level">
+                        <option value=""    {% if not exp_level %}selected{% endif %}>Любой</option>
+                        <option value="0"   {% if exp_level == '0' %}selected{% endif %}>Без опыта</option>
+                        <option value="1"   {% if exp_level == '1' %}selected{% endif %}>Есть опыт</option>
+                        <option value="3"   {% if exp_level == '3' %}selected{% endif %}>3+ мест работы</option>
+                    </select>
+                </div>
+                <div class="field actions">
+                    <button type="submit" class="btn-primary">Найти</button>
+                    <a href="{% url 'accounts:applicant_list' %}" class="btn-link">Сбросить</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="results">
+            <div class="results-head">
+                <div>Найдено: <strong>{{ page_obj.paginator.count }}</strong> соискателей</div>
+                <div class="results-meta">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</div>
+            </div>
+
+            <div class="vacancies-grid">
+                {% for applicant in applicants %}
+                    {% with u=applicant.user %}
+                    {% with full_name=u.get_full_name|default:u.username %}
+                    {% with initials=u.first_name|slice:":1"|add:u.last_name|slice:":1" %}
+                    <article class="vacancy-card applicant-card" tabindex="0">
+                        <!-- LEFT: avatar, name, location, position, skills -->
+                        <div class="ac-left">
+                            <div class="v-header">
+                                <div class="applicant-avatar" style="margin-right:12px">{{ initials|upper|default:"?" }}</div>
+                                <div style="min-width:0">
+                                    <span class="applicant-name">{{ full_name }}</span>
+                                    {% if applicant.city %}
+                                        <div class="v-company" style="margin:2px 0 0">📍 {{ applicant.city }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if applicant.metro_station_name or applicant.address %}
+                                <div class="a-location">
+                                    {% if applicant.location_type == 'metro' and applicant.metro_station_name %}
+                                        {% if applicant.metro_line_color %}
+                                            <span class="metro-dot" style="background:#{{ applicant.metro_line_color }}"></span>
+                                        {% else %}
+                                            🚇
+                                        {% endif %}
+                                        {{ applicant.metro_station_name }}
+                                        {% if applicant.metro_line_name %}
+                                            <span style="color:var(--muted);font-size:11px">({{ applicant.metro_line_name }})</span>
+                                        {% endif %}
+                                    {% elif applicant.location_type == 'address' and applicant.address %}
+                                        🏠 {{ applicant.address }}
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+
+                            {% with exps=applicant.work_experiences.all %}
+                            {% if exps %}
+                                {% with exp=exps.0 %}
+                                <div class="a-pos">
+                                    <strong>{{ exp.position }}</strong>
+                                    {% if exp.company %} — {{ exp.company }}{% endif %}
+                                    {% if exp.is_current %}<span class="badge badge-alt" style="margin-left:4px">сейчас</span>{% endif %}
+                                </div>
+                                {% endwith %}
+                            {% endif %}
+                            {% endwith %}
+
+                            {% if applicant.skills %}
+                                <div class="v-skills">
+                                    {% for skill in applicant.skills|slice:":6" %}
+                                        <span class="badge">{{ skill }}</span>
+                                    {% endfor %}
+                                    {% if applicant.skills|length > 6 %}
+                                        <span class="skills-more">+{{ applicant.skills|length|add:"-6" }} ещё</span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- RIGHT: education, contacts, actions -->
+                        <div class="ac-right">
+                            {% with edus=applicant.educations.all %}
+                            {% if edus %}
+                                {% with edu=edus.0 %}
+                                <div class="a-edu">
+                                    🎓 {{ edu.get_level_display }}
+                                    {% if edu.institution %}<br><span style="font-size:11px">{{ edu.institution }}</span>{% endif %}
+                                </div>
+                                {% endwith %}
+                            {% else %}
+                                <div class="a-edu" style="color:var(--muted)">Образование не указано</div>
+                            {% endif %}
+                            {% endwith %}
+
+                            {% if applicant.phone %}
+                                <div class="a-edu">📞 {{ applicant.phone }}</div>
+                            {% endif %}
+                            {% if applicant.telegram %}
+                                <div class="a-edu">✈️ {{ applicant.telegram }}</div>
+                            {% endif %}
+
+                            {% if user.is_authenticated %}
+                            <div class="ac-actions">
+                                <button class="btn-primary chat-start-btn"
+                                        data-uid="{{ applicant.user.pk }}">💬 Написать</button>
+                                <a class="btn" href="{% url 'accounts:resume_pdf' applicant.pk %}"
+                                   target="_blank"
+                                   title="Открыть резюме для печати">📄 Резюме</a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endwith %}{% endwith %}{% endwith %}
+                {% empty %}
+                    <div class="empty">По вашему запросу соискателей не найдено. Попробуйте изменить параметры поиска.</div>
+                {% endfor %}
+            </div>
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="pager">
+                {% if page_obj.has_previous %}
+                    <a class="pager-link" href="?{{ filters_query }}{% if filters_query %}&{% endif %}page={{ page_obj.previous_page_number }}">← Назад</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a class="pager-link" href="?{{ filters_query }}{% if filters_query %}&{% endif %}page={{ page_obj.next_page_number }}">Вперёд →</a>
+                {% endif %}
+            </nav>
+            {% endif %}
+        </section>
+    </main>
+
+    <script src="{% static 'vacancies/js/theme.js' %}"></script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+    <script src="{% static 'vacancies/js/custom-select.js' %}"></script>
+    <script>
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.chat-start-btn');
+        if (!btn) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        fetch('{% url "accounts:api_chat_start" %}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ applicant_user_id: btn.dataset.uid })
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d.ok) {
+                window.location = '/accounts/chats/' + d.chat_id + '/';
+            } else {
+                btn.disabled = false;
+                btn.textContent = '💬 Написать';
+                alert('Ошибка: ' + (d.error || 'неизвестная ошибка'));
+            }
+        })
+        .catch(function(){
+            btn.disabled = false;
+            btn.textContent = '💬 Написать';
+        });
+    });
+    </script>
+    {% include 'includes/site_footer.html' %}
+</body>
+</html>

@@ -1,0 +1,72 @@
+.ap-page { width: 100%; margin: 40px auto 80px; padding: 0 32px; }
+
+        .ap-card {
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 16px;
+            padding: 36px 40px;
+        }
+
+        .ap-avatar {
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .ap-title {
+            font-size: 22px; font-weight: 700;
+            color: var(--text);
+            margin: 0 0 4px;
+        }
+
+        .ap-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 20px;
+            padding: 3px 12px;
+            font-size: 12px; font-weight: 600;
+            margin-bottom: 28px;
+        }
+
+        .ap-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 24px; }
+
+        .ap-field__label {
+            font-size: 11px; font-weight: 600; letter-spacing: .04em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .ap-field__value {
+            font-size: 15px; color: var(--text);
+        }
+        .ap-field__value.muted { color: var(--text-secondary); font-style: italic; }
+
+        .ap-divider {
+            border: none;
+            border-top: 1px solid var(--card-border);
+            margin: 28px 0;
+        }
+
+        .ap-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        .ap-actions a {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 18px;
+            border-radius: 10px;
+            font-size: 14px; font-weight: 500;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+        .ap-actions a:hover { opacity: .85; }
+        .ap-actions .btn-primary {
+            background: var(--accent); color: #fff;
+        }
+        .ap-actions .btn-outline {
+            background: transparent;
+            border: 1.5px solid var(--card-border);
+            color: var(--text);
+        }

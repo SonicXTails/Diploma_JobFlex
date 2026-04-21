@@ -1,0 +1,10 @@
+.anim-hidden { opacity: 0; }
+        .field-enter {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.32s ease, transform 0.32s ease;
+        }
+        .field-enter.field-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }

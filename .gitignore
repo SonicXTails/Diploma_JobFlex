@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+db.sqlite3
+backups/*.sqlite3
+celerybeat-schedule
+celerybeat-schedule.*

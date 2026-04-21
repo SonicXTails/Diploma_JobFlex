@@ -1,0 +1,239 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Отклики: {{ vacancy.title }} — Агрегатор</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'accounts/css/vacancy-applications.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+<header class="site-header">
+    <div class="container header-inner">
+        <a href="/" class="logo"><img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img"><span class="logo-text">JobFlex</span></a>
+        <div class="header-actions">
+            <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+        </div>
+    </div>
+</header>
+
+<main class="container container--wide">
+    <h2 class="page-title">Отклики на вакансию</h2>
+    <p class="page-sub">
+        <a href="{% url 'vacancy-detail' vacancy.external_id %}" class="u-link-accent">
+            {{ vacancy.title }}
+        </a>
+        {% if vacancy.company %} — {{ vacancy.company }}{% endif %}
+        &nbsp;·&nbsp; Всего: <strong>{{ applications|length }}</strong>
+        {% if applications %}
+        &nbsp;·&nbsp; <a class="btn va-export-btn" href="{% url 'accounts:export_applications_csv' vacancy.pk %}">📥 Скачать CSV</a>
+        {% endif %}
+    </p>
+
+    {% if applications %}
+        {% for app in applications %}
+            {% with u=app.applicant ap=app.applicant.applicant %}
+            <div class="app-card" id="app-{{ app.pk }}">
+                <div class="app-avatar">
+                    {{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}{{ u.last_name|slice:":1"|upper }}
+                </div>
+                <div class="app-body">
+                    <div class="app-name">{{ u.get_full_name|default:u.username }}</div>
+                    <div class="app-meta">
+                        {% if ap.city %}📍 {{ ap.city }} &nbsp;{% endif %}
+                        {% if ap.phone %}📞 {{ ap.phone }} &nbsp;{% endif %}
+                        {% if ap.skills %}
+                            {% for sk in ap.skills|slice:":5" %}<span class="badge va-skill-badge">{{ sk }}</span> {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% if app.cover_letter %}
+                        <div class="app-cover-label">Сопроводительное письмо</div>
+                        <div class="app-cover">{{ app.cover_letter }}</div>
+                    {% endif %}
+                </div>
+                <div class="app-side">
+                    <div class="app-date">{{ app.created_at|date:"d.m.Y" }}</div>
+                    <select class="status-select" data-app="{{ app.pk }}" data-status="{{ app.status }}">
+                        {% for val, label in status_choices %}
+                            <option value="{{ val }}" {% if val == app.status %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="app-actions">
+                        {% if ap %}
+                        {% if ap.resume_file %}
+                        <a class="btn u-link-reset" href="{% url 'accounts:resume_word_view' ap.pk %}" target="_blank">📄 Резюме</a>
+                        {% else %}
+                        <a class="btn u-link-reset" href="{% url 'accounts:resume_pdf' ap.pk %}" target="_blank">📄 Резюме</a>
+                        {% endif %}
+                        {% endif %}
+                        <button class="btn-primary chat-start-btn"
+                                data-uid="{{ u.pk }}">💬 Чат</button>
+                        <button class="itv-open-btn"
+                                data-uid="{{ u.pk }}"
+                                data-vacancy="{{ vacancy.pk }}"
+                                data-name="{{ u.get_full_name|default:u.username }}">
+                            📅 Собеседование
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+        {% endfor %}
+    {% else %}
+        <div class="empty">На эту вакансию пока никто не откликнулся.</div>
+    {% endif %}
+</main>
+
+<!-- Interview scheduling modal -->
+<div id="itv-modal" class="itv-overlay u-hidden" role="dialog" aria-modal="true">
+    <div class="itv-box">
+        <div class="itv-header">
+            <div>
+                <div class="itv-title">📅 Назначить собеседование</div>
+                <div class="itv-sub" id="itv-modal-name"></div>
+            </div>
+            <button class="itv-close" id="itv-close" aria-label="Закрыть">&times;</button>
+        </div>
+        <div class="itv-body">
+            <div>
+                <div class="itv-label">Дата и время *</div>
+                <input type="datetime-local" id="itv-dt" class="itv-field" required>
+            </div>
+            <div>
+                <div class="itv-label">Место / ссылка <span class="va-optional-note">необязательно</span></div>
+                <input type="text" id="itv-location" class="itv-field" placeholder="Офис по адресу… / Zoom-ссылка…">
+            </div>
+            <div>
+                <div class="itv-label">Заметки <span class="va-optional-note">необязательно</span></div>
+                <textarea id="itv-notes" class="itv-field" placeholder="Что обсудить…"></textarea>
+            </div>
+        </div>
+        <div class="itv-footer">
+            <button class="itv-btn-cancel" id="itv-cancel">Отмена</button>
+            <button class="itv-btn-save" id="itv-save">📅 Назначить</button>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'vacancies/js/theme.js' %}"></script>
+<script src="{% static 'vacancies/js/macros.js' %}"></script>
+<script>
+'use strict';
+var CSRF = '{{ csrf_token }}';
+
+/* ── Status change ──────────────────────────────────── */
+document.querySelectorAll('.status-select').forEach(function(sel){
+    sel.addEventListener('change', function(){
+        var appPk = this.dataset.app;
+        var status = this.value;
+        var el = this;
+        fetch('/accounts/api/applications/' + appPk + '/status/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ status: status })
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d.ok) {
+                el.dataset.status = d.status;
+                // Reapply border/color class by forcing a DOM re-read
+                el.setAttribute('data-status', d.status);
+            }
+            else alert('Ошибка обновления статуса.');
+        })
+        .catch(function(){ alert('Сетевая ошибка.'); });
+    });
+});
+
+/* ── Chat start ─────────────────────────────────────── */
+document.addEventListener('click', function(e){
+    var btn = e.target.closest('.chat-start-btn');
+    if (!btn) return;
+    btn.disabled = true; btn.textContent = '…';
+    fetch('{% url "accounts:api_chat_start" %}', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ applicant_user_id: btn.dataset.uid })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (d.ok) window.location = '/accounts/chats/' + d.chat_id + '/';
+        else { btn.disabled = false; btn.textContent = '💬 Чат'; alert('Ошибка: ' + (d.error||'')); }
+    })
+    .catch(function(){ btn.disabled = false; btn.textContent = '💬 Чат'; });
+});
+
+/* ── Interview scheduling ──────────────────────────────── */
+var _itvUid = null, _itvVacancy = null;
+
+document.addEventListener('click', function(e){
+    var btn = e.target.closest('.itv-open-btn');
+    if (!btn) return;
+    _itvUid     = btn.dataset.uid;
+    _itvVacancy = btn.dataset.vacancy;
+    document.getElementById('itv-modal-name').textContent = btn.dataset.name || '';
+    document.getElementById('itv-dt').value       = '';
+    document.getElementById('itv-location').value = '';
+    document.getElementById('itv-notes').value    = '';
+    document.getElementById('itv-modal').style.display = 'flex';
+});
+
+function itvClose(){ document.getElementById('itv-modal').style.display = 'none'; }
+document.getElementById('itv-close').addEventListener('click', itvClose);
+document.getElementById('itv-cancel').addEventListener('click', itvClose);
+document.getElementById('itv-modal').addEventListener('click', function(e){
+    if(e.target === this) itvClose();
+});
+
+document.getElementById('itv-save').addEventListener('click', function(){
+    var dtVal = document.getElementById('itv-dt').value;
+    if(!dtVal){ document.getElementById('itv-dt').focus(); return; }
+
+    // datetime-local gives "YYYY-MM-DDTHH:MM"
+    var parts = dtVal.split('T');
+    var saveBtn = document.getElementById('itv-save');
+    saveBtn.disabled = true; saveBtn.textContent = '…';
+
+    fetch('/accounts/api/interviews/schedule/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+        body: JSON.stringify({
+            applicant_user_id: +_itvUid,
+            vacancy_id:        _itvVacancy ? +_itvVacancy : null,
+            date:              parts[0],
+            time:              parts[1] || '00:00',
+            location:          document.getElementById('itv-location').value.trim(),
+            notes:             document.getElementById('itv-notes').value.trim(),
+        })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        saveBtn.disabled = false; saveBtn.textContent = '📅 Назначить';
+        if(d.ok){
+            itvClose();
+            var toast = document.createElement('div');
+            toast.className = 'itv-toast';
+            toast.textContent = '✅ Собеседование назначено!';
+            document.body.appendChild(toast);
+            setTimeout(function(){ toast.remove(); }, 3500);
+        } else {
+            alert('Ошибка: ' + (d.error || 'неизвестная'));
+        }
+    })
+    .catch(function(){
+        saveBtn.disabled = false; saveBtn.textContent = '📅 Назначить';
+        alert('Сетевая ошибка.');
+    });
+});
+</script>
+{% include 'includes/site_footer.html' %}
+</body>
+</html>

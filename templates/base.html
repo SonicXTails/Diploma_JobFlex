@@ -1,0 +1,49 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}JobFlex{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'vacancies/logo.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'vacancies/logo.png' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="app-body" data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                {% block header_actions %}
+                {% if request.user.manager %}
+                <a class="btn-link" href="{% url 'vacancy-create' %}">+ Создать вакансию</a>
+                <a class="btn-link" href="{% url 'my-vacancies' %}">📋 Мои вакансии</a>
+                {% endif %}
+                {% if request.user.manager or request.user.applicant %}
+                <a class="btn-link" href="{% url 'accounts:chat_list' %}">💬 Чаты</a>
+                {% endif %}
+                {% endblock %}
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-main">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="{% static 'vacancies/js/theme.js' %}"></script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+    {% block extra_scripts %}{% endblock %}
+    {% include 'includes/site_footer.html' %}
+</body>
+</html>

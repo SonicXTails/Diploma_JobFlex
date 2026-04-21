@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}JobFlex — Регистрация менеджера{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'accounts/css/register.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/plugins/magic/magic.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+<a class="btn-link" href="{% url 'accounts:register' %}">Я соискатель</a>
+{% endblock %}
+
+{% block content %}
+    <main class="container container--wide">
+        <section class="auth">
+            <form id="register-form" class="auth-form auth-form--wide anim-hidden" onsubmit="return false;">
+                <h2>Создать аккаунт менеджера</h2>
+                <div class="fields-grid">
+                    <div class="field"><label>Фамилия *</label><input name="last_name" type="text" required placeholder="Иванов"></div>
+                    <div class="field"><label>Имя *</label><input name="first_name" type="text" required placeholder="Иван"></div>
+                    <div class="field"><label>Отчество</label><input name="patronymic" type="text" placeholder="Иванович"></div>
+                    <div class="field"><label>Логин *</label><input name="username" type="text" required placeholder="manager123"></div>
+                    <div class="field"><label>Почта *</label><input name="email" type="email" required placeholder="ivan@company.ru"></div>
+                    <div class="field"><label>Телеграм *</label><input name="telegram" type="text" required placeholder="@nickname"></div>
+                    <div class="field"><label>Компания</label><input name="company" type="text" placeholder="ООО Ромашка"></div>
+                    <div class="field"><label>Телефон</label><input name="phone" id="mgr-phone" type="tel" placeholder="+7 (___) ___-__-__"></div>
+                    <div class="field"><label>Пароль *</label><input name="password" type="password" required placeholder="Минимум 8 символов"></div>
+                    <div class="field"><label>Повторите пароль *</label><input name="password_confirm" type="password" required placeholder="Повторите пароль"></div>
+                    <div class="field full actions">
+                        <button id="submit-btn" class="btn-primary">Зарегистрироваться</button>
+                    </div>
+                </div><!-- /.fields-grid -->
+            </form>
+        </section>
+
+        <!-- Error modal -->
+        <div id="error-modal" class="modal-overlay" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true">
+                <div id="modal-message" class="modal-message">Ошибка</div>
+                <div class="modal-actions">
+                    <button id="modal-close" class="btn-primary">Ок</button>
+                </div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block extra_scripts %}    
+    <script src="{% static 'vacancies/js/custom-select.js' %}"></script>
+    <script>
+    (function(){
+        function applyRuPhoneMask(el) {
+            if (!el) return;
+            el.placeholder = '+7 (___) ___-__-__';
+            function fmt(v) {
+                var d = v.replace(/\D/g, '');
+                if (d.startsWith('8')) d = '7' + d.slice(1);
+                if (d && !d.startsWith('7')) d = '7' + d;
+                d = d.slice(0, 11);
+                var r = '';
+                if (d.length > 0) r = '+7';
+                if (d.length > 1) r += ' (' + d.slice(1, 4);
+                if (d.length >= 4) r += ')';
+                if (d.length > 4) r += ' ' + d.slice(4, 7);
+                if (d.length > 7) r += '-' + d.slice(7, 9);
+                if (d.length > 9) r += '-' + d.slice(9, 11);
+                return r;
+            }
+            el.addEventListener('input', function() { var p=this.selectionStart; this.value=fmt(this.value); try{this.setSelectionRange(p,p);}catch(e){} });
+            el.addEventListener('focus', function() { if (!this.value) this.value = '+7 ('; });
+            el.addEventListener('blur',  function() { if (/^\+7\s?\(?$/.test(this.value.trim())) this.value = ''; });
+            el.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && /^\+7\s?\(?$/.test(this.value.trim())) { this.value=''; e.preventDefault(); }
+            });
+        }
+        applyRuPhoneMask(document.getElementById('mgr-phone'));
+    })();
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Header
+        var hdr = document.querySelector('.site-header');
+        hdr.classList.remove('anim-hidden');
+        hdr.classList.add('magictime', 'fadeInDown');
+        hdr.style.animationDuration = '0.5s';
+
+        // Form card
+        var form = document.getElementById('register-form');
+        setTimeout(function() {
+            form.classList.remove('anim-hidden');
+            form.classList.add('magictime', 'puffIn');
+            form.style.animationDuration = '0.55s';
+        }, 150);
+
+        // Fields stagger
+        var fields = document.querySelectorAll('.fields-grid .field');
+        fields.forEach(function(el, i) {
+            el.classList.add('field-enter');
+            setTimeout(function() {
+                el.classList.add('field-visible');
+                el.addEventListener('transitionend', function cleanup() {
+                    el.classList.remove('field-enter', 'field-visible');
+                    el.removeEventListener('transitionend', cleanup);
+                });
+            }, 400 + i * 60);
+        });
+    });
+    </script>
+    <script>
+    function getCookie(name) {
+        var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : null;
+    }
+
+    function showError(text) {
+        var modal = document.getElementById('error-modal');
+        document.getElementById('modal-message').textContent = text;
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeError() {
+        var modal = document.getElementById('error-modal');
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('modal-close').addEventListener('click', closeError);
+    document.getElementById('error-modal').addEventListener('click', function(e){ if (e.target === this) closeError(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeError(); });
+
+    document.getElementById('submit-btn').addEventListener('click', function(){
+        var f = document.getElementById('register-form');
+
+        function normalizeName(s){
+            if (!s) return '';
+            s = s.trim();
+            return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        }
+
+        var last     = normalizeName(f.last_name.value);
+        var first    = normalizeName(f.first_name.value);
+        var patron   = f.patronymic.value.trim() ? normalizeName(f.patronymic.value) : '';
+        var username = f.username.value.trim();
+        var email    = f.email.value.trim();
+        var telegram = f.telegram.value.trim();
+        var company  = f.company.value.trim();
+        var phone    = f.phone.value.trim();
+        var password = f.password.value;
+        var passConfirm = f.password_confirm.value;
+
+        // Name validation
+        if (last.length < 2 || last.length > 50)   { showError('Фамилия должна быть от 2 до 50 символов.'); return; }
+        if (first.length < 2 || first.length > 50)  { showError('Имя должно быть от 2 до 50 символов.'); return; }
+        if (patron && (patron.length < 2 || patron.length > 50)) { showError('Отчество должно быть от 2 до 50 символов или оставьте пустым.'); return; }
+
+        // Username
+        if (!username) { showError('Укажите логин.'); return; }
+        if (username.length < 3 || username.length > 30) { showError('Логин должен быть от 3 до 30 символов.'); return; }
+        if (!/^[A-Za-z0-9_.\-]+$/.test(username)) { showError('Логин может содержать только латинские буквы, цифры и символы ._-'); return; }
+
+        if (!email) { showError('Укажите почту.'); return; }
+
+        if (!telegram) { showError('Укажите, пожалуйста, Телеграм.'); return; }
+        if (telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
+
+        // Password
+        if (password !== passConfirm) { showError('Пароли не совпадают.'); return; }
+        var pwErrors = [];
+        if (password.length < 8) pwErrors.push('минимум 8 символов');
+        if (!/[A-ZА-ЯЁ]/.test(password)) pwErrors.push('хотя бы одна заглавная буква');
+        if (!/[a-zа-яё]/.test(password)) pwErrors.push('хотя бы одна строчная буква');
+        if (!/[0-9]/.test(password)) pwErrors.push('хотя бы одна цифра');
+        if (!/[!@#\$%\^&\*()_+\-=[\]{};':"\\|,.<>\/?`~]/.test(password)) pwErrors.push('хотя бы один спецсимвол');
+        if (pwErrors.length) { showError('Пароль должен содержать: ' + pwErrors.join(', ') + '.'); return; }
+
+        fetch('{% url "accounts:api_register_manager" %}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                last_name: last, first_name: first, patronymic: patron,
+                username: username, email: email, telegram: telegram,
+                company: company, phone: phone,
+                password: password
+            })
+        }).then(function(r){
+            return r.json().then(function(d){ return {status: r.status, body: d}; });
+        }).then(function(res){
+            if (res.status === 200 && res.body.ok) {
+                window.location.href = '/accounts/profile/';
+            } else {
+                var code = res.body && res.body.error ? res.body.error : null;
+                var msgs = {
+                    'missing_fields':          'Заполните, пожалуйста, все обязательные поля.',
+                    'email_exists':            'Пользователь с такой почтой уже зарегистрирован.',
+                    'username_exists':         'Этот логин уже занят.',
+                    'telegram_exists':         'Этот Телеграм уже зарегистрирован.',
+                    'invalid_telegram_format': 'Телеграм должен начинаться с @.',
+                    'invalid_username':        'Логин должен быть от 3 до 30 символов.',
+                    'invalid_username_format': 'Логин может содержать только латинские буквы, цифры и символы ._-',
+                };
+                showError(msgs[code] || 'Ошибка сервера. Попробуйте позже.');
+            }
+        }).catch(function(){ showError('Сетевая ошибка. Проверьте соединение.'); });
+    });
+    </script>
+{% endblock %}

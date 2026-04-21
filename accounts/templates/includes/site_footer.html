@@ -1,0 +1,56 @@
+{% load static %}
+    <link rel="stylesheet" href="{% static 'accounts/css/site-footer.css' %}">
+
+<footer class="site-footer" role="contentinfo">
+    <div class="site-footer__inner">
+        <div class="site-footer__grid">
+            <div class="site-footer__brand">
+                <a href="/" class="site-footer__logo">
+                    <img src="{% static 'logo/logo.png' %}" alt="JobFlex" class="site-footer__logo-img">
+                    <span>JobFlex</span>
+                </a>
+                <div class="site-footer__text">
+                    Платформа для поиска работы, откликов и коммуникации между соискателями, менеджерами и администраторами.
+                </div>
+                <div class="site-footer__meta">
+                    Поддержка: support@jobflex.local<br>
+                    Линия помощи: +7 (495) 555-18-24<br>
+                    Пн–Пт, 10:00–19:00 МСК
+                </div>
+            </div>
+
+            <div>
+                <div class="site-footer__title">О платформе</div>
+                <div class="site-footer__nav">
+                    <div class="site-footer__text">JobFlex объединяет вакансии из нескольких источников и помогает вести полный цикл подбора персонала в одном интерфейсе.</div>
+                    <div class="site-footer__text">Система поддерживает работу соискателей, менеджеров по найму и администраторов.</div>
+                    <div class="site-footer__text">Основные сценарии: публикация вакансий, поиск работы, отклики, переписка и сопровождение собеседований.</div>
+                </div>
+            </div>
+
+            <div>
+                <div class="site-footer__title">Функциональные возможности</div>
+                <div class="site-footer__nav">
+                    <div class="site-footer__text">Агрегация и фильтрация вакансий по расширенным параметрам.</div>
+                    <div class="site-footer__text">Профиль соискателя с резюме, навыками, адресом и метро.</div>
+                    <div class="site-footer__text">Чаты, календарь, заметки, управление откликами и аналитика по ролям.</div>
+                    <div class="site-footer__text">Административные инструменты: аудит API, управление пользователями и резервные копии.</div>
+                </div>
+            </div>
+
+            <div>
+                <div class="site-footer__title">О сервисе</div>
+                <div class="site-footer__nav">
+                    <div class="site-footer__text">Подбор вакансий, управление откликами, заметки и календарь собеседований в одном интерфейсе.</div>
+                    <div class="site-footer__badge{% if not service_center_online %} site-footer__badge--offline{% endif %}">Сервисный режим: {{ service_center_status_text }}</div>
+                    <div class="site-footer__text">Версия интерфейса: март 2026</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="site-footer__bottom">
+            <div class="site-footer__meta">© 2026 JobFlex. Все права защищены.</div>
+            <div class="site-footer__meta">Москва · Санкт-Петербург · Новосибирск</div>
+        </div>
+    </div>
+</footer>

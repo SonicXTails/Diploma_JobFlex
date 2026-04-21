@@ -1,0 +1,179 @@
+:root,
+.light-theme {
+  --text-main: var(--text);
+  --card-bg: var(--surface);
+  --card-shadow: var(--shadow);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --content-max: 1200px;
+}
+
+.theme-dark {
+  --text-main: var(--text);
+  --card-bg: var(--surface);
+  --card-shadow: var(--shadow);
+}
+
+.app-body {
+  min-height: 100vh;
+}
+
+.page-main {
+  padding: var(--space-4) 0 var(--space-5);
+}
+
+:where(section, .page-section) {
+  margin-bottom: var(--space-4);
+}
+
+:where(.container) {
+  max-width: var(--content-max);
+}
+
+:where(.site-header .container) {
+  max-width: var(--content-max);
+}
+
+:where(h1, h2, h3, h4) {
+  margin-top: 0;
+  line-height: 1.25;
+}
+
+:where(p) {
+  margin-top: 0;
+}
+
+:where(.card, .ui-card) {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+
+:where(.btn, .btn-primary, .btn-link) {
+  min-height: 40px;
+}
+
+:where(input, select, textarea) {
+  min-height: 40px;
+}
+
+:where(input, select, textarea, button):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 75%, white);
+  outline-offset: 2px;
+}
+
+:where(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:where(table th, table td) {
+  border-bottom: 1px solid var(--card-border);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+:where(.header-actions) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Shared utility classes for template cleanup */
+.u-hidden {
+  display: none;
+}
+
+.u-flex-center {
+  display: flex;
+  justify-content: center;
+}
+
+.u-flex-wrap-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.u-max-w-480 {
+  max-width: 480px;
+}
+
+.u-text-muted-xs {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.u-link-accent {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.u-link-reset {
+  text-decoration: none;
+}
+
+.u-overflow-x-auto {
+  overflow-x: auto;
+}
+
+.u-currency-wrap {
+  position: relative;
+}
+
+.u-currency-sign {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 15px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.u-btn-danger-outline {
+  color: #b00;
+  border-color: #b00;
+}
+
+.u-warning-banner {
+  background: #fff3cd;
+  border-top: 2px solid #e6a817;
+  color: #7a5400;
+  font-size: .9em;
+  text-align: center;
+  padding: .6rem 1rem;
+}
+
+@media (max-width: 900px) {
+  .page-main {
+    padding: var(--space-3) 0 var(--space-4);
+  }
+}
+
+@media (max-width: 768px) {
+  :where(.container),
+  :where(.container.container--wide) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  :where(.site-header .header-inner) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  :where(.header-actions) {
+    gap: 6px;
+  }
+}

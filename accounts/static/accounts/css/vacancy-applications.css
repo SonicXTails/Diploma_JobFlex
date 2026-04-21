@@ -1,0 +1,100 @@
+.page-title { font-size: 22px; font-weight: 700; color: var(--text); margin: 24px 0 4px; }
+        .page-sub   { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+        .va-export-btn { font-size: 12px; }
+        .va-skill-badge { font-size: 11px; }
+        .va-optional-note { opacity: .55; font-weight: 400; text-transform: none; }
+
+        .app-card {
+            background: var(--surface); border: 1.5px solid var(--card-border);
+            border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
+            display: flex; gap: 16px; align-items: flex-start;
+        }
+        .app-avatar {
+            width: 46px; height: 46px; border-radius: 50%;
+            background: var(--accent); color: #fff;
+            font-weight: 700; font-size: 17px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .app-body { flex: 1; min-width: 0; }
+        .app-name  { font-size: 15px; font-weight: 600; color: var(--text); }
+        .app-meta  { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+        .app-cover {
+            font-size: 13px; color: var(--text);
+            background: var(--surface); border-radius: 8px;
+            padding: 8px 12px 10px; margin-top: 4px;
+            max-height: 120px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-word;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent;
+        }
+        .app-cover::-webkit-scrollbar { width: 4px; }
+        .app-cover::-webkit-scrollbar-track { background: transparent; }
+        .app-cover::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
+        .app-cover-label { font-size: 11px; font-weight: 600; color: var(--text-secondary);
+                           text-transform: uppercase; letter-spacing: .05em; margin-top: 10px; margin-bottom: 0; }
+        .app-side  { flex-shrink: 0; text-align: right; width: 160px; }
+        .app-date  { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+
+        /* Status selector */
+        .status-select {
+            padding: 6px 10px; font-size: 13px;
+            border-radius: 8px; border: 1.5px solid var(--card-border);
+            background: var(--surface); color: var(--text); cursor: pointer;
+            width: 100%; box-sizing: border-box;
+        }
+        .status-select[data-status="pending"]  { border-color: #f0ad4e; color: #f0ad4e; }
+        .status-select[data-status="viewed"]   { border-color: #4e8af0; color: #4e8af0; }
+        .status-select[data-status="accepted"] { border-color: #5cb85c; color: #5cb85c; }
+        .status-select[data-status="rejected"] { border-color: #d9534f; color: #d9534f; }
+
+        .app-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; align-items: stretch; width: 100%; }
+        .app-actions .btn, .app-actions .btn-primary, .app-actions .itv-open-btn { font-size: 12px; text-align: center; width: 100%; box-sizing: border-box; }
+        .itv-open-btn { padding: 6px 12px; border-radius: 9px; border: 1.5px solid #9b59b6; background: none; color: #9b59b6; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
+        .itv-open-btn:hover { background: #9b59b6; color: #fff; }
+        .empty { color: var(--text-secondary); text-align: center; padding: 60px 0; font-size: 15px; }
+
+        /* ──── Interview modal ──── */
+        .itv-overlay {
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .itv-box {
+            background: var(--surface); border: 1.5px solid var(--card-border);
+            border-radius: 18px; width: 620px; max-width: 95vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,.35);
+            overflow: hidden;
+        }
+        .itv-header {
+            padding: 18px 22px 14px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .itv-title  { font-size: 16px; font-weight: 700; color: var(--text); }
+        .itv-sub    { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+        .itv-close  { background: none; border: none; font-size: 20px; cursor: pointer;
+                      color: var(--text-secondary); line-height:1; padding: 0 4px; }
+        .itv-body   { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+        .itv-label  { font-size: 12px; font-weight: 600; color: var(--text-secondary);
+                      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+        .itv-field  { background: var(--surface); border: 1.5px solid var(--card-border);
+                      border-radius: 10px; color: var(--text); font-size: 13px;
+                      padding: 9px 13px; width: 100%; box-sizing: border-box;
+                      font-family: inherit; transition: border-color .15s; }
+        .itv-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201,100,66,.18); }
+        .itv-field[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.5); }
+        textarea.itv-field { resize: vertical; min-height: 70px; }
+        .itv-footer { padding: 12px 22px 18px; display: flex; gap: 10px; justify-content: flex-end; }
+        .itv-btn-cancel { padding: 8px 18px; border-radius: 10px; border: 1.5px solid var(--card-border);
+                          background: none; color: var(--text); font-size: 13px; cursor: pointer; }
+        .itv-btn-save   { padding: 8px 20px; border-radius: 10px; border: none;
+                          background: #9b59b6; color: #fff; font-size: 13px; font-weight: 600;
+                          cursor: pointer; transition: opacity .15s; }
+        .itv-btn-save:hover { opacity: .87; }
+        .itv-btn-save:disabled { opacity: .55; cursor: default; }
+        .itv-toast { position: fixed; bottom: 24px; right: 24px; z-index: 2000;
+                     background: #9b59b6; color: #fff; border-radius: 12px;
+                     padding: 12px 20px; font-size: 14px; font-weight: 600;
+                     box-shadow: 0 4px 20px rgba(0,0,0,.25);
+                     animation: itv-fade-in .2s ease; }
+        @keyframes itv-fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }

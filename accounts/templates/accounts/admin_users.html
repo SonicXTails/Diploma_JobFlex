@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}JobFlex - Пользователи{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'accounts/css/admin-users.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn-link" href="{% url 'accounts:admin_panel' %}">⬅ Панель</a>
+<a class="btn-link" href="{% url 'accounts:admin_profile_page' %}">👤 Профиль</a>
+<a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
+{% endblock %}
+
+{% block content %}
+<main class="container container--wide au-page">
+    <div class="au-head">
+        <div>
+            <h1 class="au-title">Управление пользователями</h1>
+            <p class="au-sub">Редактирование контактов, смена роли и удаление аккаунтов.</p>
+        </div>
+    </div>
+
+    {% if status_text %}
+    <p class="au-status">{{ status_text }}</p>
+    {% endif %}
+
+    <form method="get" class="au-search">
+        <input class="au-input" type="text" name="q" value="{{ q }}" placeholder="Поиск по имени, email, телефону, telegram">
+        <button class="au-btn" type="submit">Найти</button>
+        <a class="au-btn" href="{% url 'accounts:admin_users' %}">Сбросить</a>
+    </form>
+
+    {% for row in rows %}
+    <div class="au-card">
+        <form method="post" class="au-grid">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ row.user.id }}">
+
+            <div class="au-col au-col--name">
+                <label class="au-lbl">Пользователь</label>
+                <div><strong>{{ row.user.username }}</strong></div>
+                <span class="au-role au-role--{{ row.role }}">{{ row.role_label }}</span>
+                {% if row.is_self %}<div class="au-self-note">Ваш аккаунт</div>{% endif %}
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Имя</label>
+                <input class="au-input" type="text" name="first_name" value="{{ row.first_name }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Фамилия</label>
+                <input class="au-input" type="text" name="last_name" value="{{ row.last_name }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Отчество</label>
+                <input class="au-input" type="text" name="patronymic" value="{{ row.patronymic }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Email</label>
+                <input class="au-input" type="email" name="email" value="{{ row.email }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Телефон</label>
+                <input class="au-input" type="text" name="phone" value="{{ row.phone }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Telegram</label>
+                <input class="au-input" type="text" name="telegram" value="{{ row.telegram }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Город</label>
+                <input class="au-input" type="text" name="city" value="{{ row.city }}">
+            </div>
+
+            <div class="au-col">
+                <label class="au-lbl">Компания</label>
+                <input class="au-input" type="text" name="company" value="{{ row.company }}">
+            </div>
+
+            <div class="au-col au-col--full">
+                <div class="au-actions">
+                    <button class="au-btn au-btn--save" type="submit" name="action" value="save">Сохранить контакты</button>
+                    <select class="au-input au-role-select" name="new_role">
+                        <option value="applicant" {% if row.role == 'applicant' %}selected{% endif %}>Соискатель</option>
+                        <option value="manager" {% if row.role == 'manager' %}selected{% endif %}>Менеджер</option>
+                        <option value="admin" {% if row.role == 'admin' %}selected{% endif %}>Администратор</option>
+                    </select>
+                    <button class="au-btn au-btn--role" type="submit" name="action" value="change_role">Сменить роль</button>
+                    <button class="au-btn au-btn--delete" type="submit" name="action" value="delete" {% if row.is_self %}disabled title="Нельзя удалить себя"{% endif %} onclick="return confirm('Удалить пользователя {{ row.user.username }}?');">Удалить</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% empty %}
+    <p class="au-status">Пользователи не найдены.</p>
+    {% endfor %}
+
+    {% if page_obj %}
+    <div class="au-pager">
+        {% if page_obj.has_previous %}
+        <a class="au-page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}">← Назад</a>
+        {% endif %}
+
+        <span class="au-page-num">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+
+        {% if page_obj.has_next %}
+        <a class="au-page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}">Вперёд →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,7 @@
+.rating-stars { display: inline-block; vertical-align: middle; }
+.rating-star { font-size: 14px; margin-right: 2px; }
+.rating-star.empty { opacity: 0.35; }
+.rating-num { margin-left: 6px; font-weight: 600; color: var(--text); }
+.rating-good { color: #2e7d32; }
+.rating-medium { color: #ff9800; }
+.rating-bad { color: #d32f2f; }

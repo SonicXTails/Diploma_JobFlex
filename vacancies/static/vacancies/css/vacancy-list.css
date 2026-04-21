@@ -1,0 +1,64 @@
+.metro-search-wrap { position: relative; margin-top: 10px; }
+        .vlist-mt-10 { margin-top: 10px; }
+        #f-metro-search { padding-left: 34px; }
+        .metro-search-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: .68;
+            pointer-events: none;
+        }
+        .metro-dropdown {
+            display: none;
+            position: absolute;
+            z-index: 60;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 10px;
+            max-height: 300px;
+            overflow: auto;
+            box-shadow: 0 12px 22px rgba(0,0,0,.2);
+        }
+        .metro-dropdown.open { display: block; }
+        .metro-group-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: 8px 10px;
+            border-top: 1px solid var(--card-border);
+        }
+        .metro-group-label:first-child { border-top: none; }
+        .metro-line-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .metro-station-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .metro-station-item:hover,
+        .metro-station-item.hovered { background: var(--surface-hover); }
+        .metro-station-item .ms-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .metro-selected-badge {
+            margin-top: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: var(--surface);
+            border: 1px solid var(--card-border);
+            font-size: 13px;
+            color: var(--text);
+        }
+        .metro-selected-badge .ms-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .metro-no-match { padding: 12px; font-size: 13px; color: var(--text-secondary); text-align: center; }

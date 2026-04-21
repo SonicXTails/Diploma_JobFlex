@@ -1,0 +1,67 @@
+/* ── Applicant card ──────────────────────────────────── */
+        .applicant-card { align-items: stretch; }
+
+        .ac-left {
+            flex: 1;
+            min-width: 0;
+            margin-right: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+        .ac-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-width: 220px;
+            max-width: 260px;
+            flex-shrink: 0;
+            gap: 6px;
+        }
+
+        .applicant-avatar {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 700;
+            font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .applicant-name {
+            font-size: 16px; font-weight: 600;
+            color: var(--text);
+            text-decoration: none;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            display: block;
+        }
+        .v-skills { flex-wrap: wrap; display: flex; gap: 4px; margin-top: 10px; }
+        .v-skills .badge { font-size: 12px; }
+        .skills-more { font-size: 12px; color: var(--text-secondary); margin-left: 4px; align-self: center; }
+        .a-pos { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
+        .a-pos strong { color: var(--text); }
+        .al-salary-input { padding-right: 34px; }
+        .a-edu {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: right;
+            line-height: 1.5;
+        }
+        .a-location { font-size: 13px; color: var(--text-secondary); margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+        .metro-dot {
+            display: inline-block; width: 10px; height: 10px;
+            border-radius: 50%; flex-shrink: 0;
+        }
+        .ac-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 10px;
+        }
+        .ac-actions .btn-primary,
+        .ac-actions .btn {
+            white-space: nowrap;
+            text-decoration: none;
+        }

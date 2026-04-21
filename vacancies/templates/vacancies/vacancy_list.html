@@ -1,0 +1,862 @@
+<!doctype html>
+{% load static %}
+{% load vacancy_extras %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Главная страница</title>
+    <link rel="icon" type="image/png" href="{% static 'vacancies/logo.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'vacancies/logo.png' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <script>
+            (function(){
+                try{
+                    var key = 'site_theme';
+                    var saved = localStorage.getItem(key);
+                    if(saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                        document.documentElement.classList.add('theme-dark');
+                    }
+                }catch(e){}
+            })();
+        </script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    <!-- Magic CSS animations (from plugins) -->
+    <link rel="stylesheet" href="{% static 'vacancies/css/plugins/magic/magic.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'vacancies/css/vacancy-list.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                {% if user.is_authenticated %}
+                    <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+                {% else %}
+                    <a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+                {% endif %}
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container container--wide">
+        <section class="filters">
+            <form method="get" id="filter-form">
+                <div class="search-hero">
+                    <input class="search-q" type="text" name="q" value="{{ q }}" placeholder="Должность, ключевые слова...">
+                    <select class="search-region" name="region">
+                        <option value="">Все регионы</option>
+                        {% for area_name in region_options %}
+                            <option value="{{ area_name }}" {% if area_name == region %}selected{% endif %}>{{ area_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-primary btn-search">Найти</button>
+                </div>
+                <div class="filter-quick-bar">
+                    <div class="fqb-group">
+                        <label>Сортировка</label>
+                        <select name="sort">
+                            <option value="">По соответствию</option>
+                            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>По дате изменения</option>
+                            <option value="salary" {% if sort == 'salary' %}selected{% endif %}>По убыванию зарплат</option>
+                            <option value="salary_asc" {% if sort == 'salary_asc' %}selected{% endif %}>По возрастанию зарплаты</option>
+                        </select>
+                    </div>
+                    <div class="fqb-group">
+                        <label>Период</label>
+                        <select name="published_since">
+                            <option value="">За всё время</option>
+                            <option value="month" {% if published_since == 'month' %}selected{% endif %}>За месяц</option>
+                            <option value="week" {% if published_since == 'week' %}selected{% endif %}>За неделю</option>
+                            <option value="3days" {% if published_since == '3days' %}selected{% endif %}>За последние три дня</option>
+                            <option value="day" {% if published_since == 'day' %}selected{% endif %}>За сутки</option>
+                        </select>
+                    </div>
+                    <div class="fqb-group">
+                        <label>На странице</label>
+                        <select name="per_page">
+                            <option value="20" {% if per_page != '50' and per_page != '100' %}selected{% endif %}>20 вакансий</option>
+                            <option value="50" {% if per_page == '50' %}selected{% endif %}>50 вакансий</option>
+                            <option value="100" {% if per_page == '100' %}selected{% endif %}>100 вакансий</option>
+                        </select>
+                    </div>
+                    <a href="/" class="fqb-reset btn-link">Сбросить всё</a>
+                    {% if user.is_authenticated %}
+                    {{ user_presets|json_script:"preset-data" }}
+                    <div class="fqb-group fqb-presets" id="fqb-presets-group">
+                        <label>Мои фильтры</label>
+                        <div class="preset-selector-wrap">
+                            <select id="preset-select">
+                                <option value="">— выбрать пресет —</option>
+                                {% for p in user_presets %}
+                                <option value="{{ p.id }}">{{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" id="preset-apply" class="btn-preset-apply" title="Применить пресет" disabled>✓</button>
+                            <button type="button" id="preset-delete" class="btn-preset-delete" title="Удалить пресет" disabled>✕</button>
+                            <button type="button" id="preset-save-btn" class="btn-preset-save" title="Сохранить текущие фильтры как пресет">+ Сохранить фильтр</button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <details class="adv-details" {% if has_advanced_filters %}open{% endif %} id="adv-details">
+                    <summary class="adv-summary">Подробные фильтры</summary>
+                    <div class="adv-grid">
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Ключевые слова</div>
+                            <div class="field">
+                                <label>Искать только</label>
+                                <div class="radio-group">
+                                    <label class="radio"><input type="radio" name="q_scope" value="title" {% if q_scope == 'title' or not q_scope %}checked{% endif %}> в названии вакансии</label>
+                                    <label class="radio"><input type="radio" name="q_scope" value="company" {% if q_scope == 'company' %}checked{% endif %}> в названии компании</label>
+                                    <label class="radio"><input type="radio" name="q_scope" value="description" {% if q_scope == 'description' %}checked{% endif %}> в описании вакансии</label>
+                                    <label class="radio"><input type="radio" name="q_scope" value="all" {% if q_scope == 'all' %}checked{% endif %}> везде</label>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label>Исключить слова</label>
+                                <input type="text" name="exclude_words" value="{{ exclude_words }}" placeholder="слово1 слово2">
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Уровень дохода</div>
+                            <div class="salary-row">
+                                <input class="salary-input" type="text" name="salary_min" value="{{ salary_min }}" placeholder="от">
+                                <span class="salary-dash">—</span>
+                                <input class="salary-input" type="text" name="salary_max" value="{{ salary_max }}" placeholder="до">
+                                <span class="salary-currency">RUB</span>
+                            </div>
+                            <label class="checkbox adv-check">
+                                <input type="checkbox" name="only_with_salary" value="1" {% if only_with_salary %}checked{% endif %}>
+                                Только с указанным доходом
+                            </label>
+                            <div class="filter-group-title vlist-mt-10">Частота выплат</div>
+                            <div class="checkbox-group">
+                                {% for pf_id, pf_name in payment_frequency_options %}
+                                    <label class="checkbox"><input type="checkbox" name="payment_frequency" value="{{ pf_id }}" {% if pf_id in selected_payment_frequencies %}checked{% endif %}> {{ pf_name }}</label>
+                                {% empty %}
+                                    <div class="muted">Данных на данный момент нет</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Требуемый опыт</div>
+                            <div class="checkbox-group">
+                                {% for exp_id, exp_name in experience_options %}
+                                    <label class="checkbox">
+                                        <input type="checkbox" name="experience" value="{{ exp_id }}" {% if exp_id in selected_experiences %}checked{% endif %}>
+                                        {{ exp_name }}
+                                    </label>
+                                {% empty %}
+                                    <div class="muted">Пока нет данных по требуемому опыту</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Тип занятости</div>
+                            <div class="checkbox-group">
+                                {% for e_id, e_name in employment_options %}
+                                    <label class="checkbox">
+                                        <input type="checkbox" name="employment" value="{{ e_id }}" {% if e_id in selected_employments %}checked{% endif %}>
+                                        {{ e_name }}
+                                    </label>
+                                {% empty %}
+                                    <div class="muted">Пока нет данных по типу занятости</div>
+                                {% endfor %}
+                                <label class="checkbox">
+                                    <input type="checkbox" name="label" value="internship" {% if "internship" in selected_labels %}checked{% endif %}>
+                                    Стажировка
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">График работы</div>
+                            <div class="checkbox-group">
+                                {% for s_id, s_name in schedule_options %}
+                                    <label class="checkbox">
+                                        <input type="checkbox" name="schedule" value="{{ s_id }}" {% if s_id in selected_schedules %}checked{% endif %}>
+                                        {{ s_name }}
+                                    </label>
+                                {% empty %}
+                                    <div class="muted">Пока нет данных по графику</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Форма занятости</div>
+                            <div class="checkbox-group">
+                                {% for ef_id, ef_name in employment_form_options %}
+                                    <label class="checkbox">
+                                        <input type="checkbox" name="employment_form" value="{{ ef_id }}" {% if ef_id in selected_employment_forms %}checked{% endif %}>
+                                        {{ ef_name }}
+                                    </label>
+                                {% empty %}
+                                    <div class="muted">Пока нет данных по форме занятости</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Условия работы</div>
+                            <div class="checkbox-group">
+                                {% for et_id, et_name in employee_type_options %}
+                                    <label class="checkbox"><input type="checkbox" name="employee_type" value="{{ et_id }}" {% if et_id in selected_employee_types %}checked{% endif %}> {{ et_name }}</label>
+                                {% endfor %}
+                                <label class="checkbox"><input type="checkbox" name="contract" value="labor" {% if "labor" in selected_contract_types %}checked{% endif %}> Трудовой договор</label>
+                                <label class="checkbox"><input type="checkbox" name="contract" value="gpc" {% if "gpc" in selected_contract_types %}checked{% endif %}> Договор ГПХ</label>
+                                <label class="checkbox"><input type="checkbox" name="night_shifts" value="1" {% if only_night_shifts %}checked{% endif %}> Ночные смены</label>
+                            </div>
+                            <div class="field vlist-mt-10">
+                                <label>Период зарплаты</label>
+                                <div class="checkbox-group">
+                                    {% for sp_id, sp_name in salary_period_options %}
+                                        <label class="checkbox"><input type="checkbox" name="salary_period" value="{{ sp_id }}" {% if sp_id in selected_salary_periods %}checked{% endif %}> {{ sp_name }}</label>
+                                    {% empty %}
+                                        <div class="muted">Данных на данный момент нет</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Режим занятости</div>
+                            <div class="field">
+                                <label>Сменный график</label>
+                                <div class="checkbox-group checkbox-group-compact">
+                                    {% for pattern_id, pattern_name in shift_pattern_options %}
+                                        <label class="checkbox"><input type="checkbox" name="shift_pattern" value="{{ pattern_id }}" {% if pattern_id in selected_shift_patterns %}checked{% endif %}> {{ pattern_name }}</label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label>График по дням</label>
+                                <div class="checkbox-group checkbox-group-compact">
+                                    {% for ws_id, ws_name in work_schedule_options %}
+                                        <label class="checkbox"><input type="checkbox" name="work_schedule" value="{{ ws_id }}" {% if ws_id in selected_work_schedules %}checked{% endif %}> {{ ws_name }}</label>
+                                    {% empty %}
+                                        <div class="muted">Пока нет данных по графику по дням</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label>Часов в день</label>
+                                <div class="checkbox-group checkbox-group-compact">
+                                    {% for hp_id, hp_name in hours_per_day_options %}
+                                        <label class="checkbox"><input type="checkbox" name="hours_per_day" value="{{ hp_id }}" {% if hp_id in selected_hours_per_day %}checked{% endif %}> {{ hp_name }}</label>
+                                    {% empty %}
+                                        <div class="muted">Пока нет данных по часам в день</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Формат работы</div>
+                            <div class="checkbox-group">
+                                <label class="checkbox"><input type="checkbox" name="format" value="onsite" {% if "onsite" in selected_formats %}checked{% endif %}> На месте работодателя</label>
+                                <label class="checkbox"><input type="checkbox" name="format" value="remote" {% if "remote" in selected_formats %}checked{% endif %}> Удалённо</label>
+                                <label class="checkbox"><input type="checkbox" name="format" value="hybrid" {% if "hybrid" in selected_formats %}checked{% endif %}> Гибрид</label>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Работодатель и навыки</div>
+                            <div class="field">
+                                <label>Работодатель</label>
+                                <input type="text" name="employer" value="{{ employer }}" placeholder="Название компании">
+                            </div>
+                            <div class="field">
+                                <label>Ключевые навыки</label>
+                                <input type="text" name="skills" value="{{ skills }}" placeholder="python, django, sql">
+                            </div>
+                            <div class="field">
+                                <label>Станция метро</label>
+                                <select id="f-metro-city-select" name="metro_city_id">
+                                    <option value="">Выберите город метро</option>
+                                    <option value="1" {% if metro_city_id == '1' %}selected{% endif %}>Москва</option>
+                                    <option value="2" {% if metro_city_id == '2' %}selected{% endif %}>Санкт-Петербург</option>
+                                    <option value="3" {% if metro_city_id == '3' %}selected{% endif %}>Волгоград</option>
+                                    <option value="4" {% if metro_city_id == '4' %}selected{% endif %}>Нижний Новгород</option>
+                                    <option value="5" {% if metro_city_id == '5' %}selected{% endif %}>Новосибирск</option>
+                                    <option value="6" {% if metro_city_id == '6' %}selected{% endif %}>Самара</option>
+                                    <option value="7" {% if metro_city_id == '7' %}selected{% endif %}>Екатеринбург</option>
+                                    <option value="8" {% if metro_city_id == '8' %}selected{% endif %}>Казань</option>
+                                </select>
+                                <div class="metro-search-wrap">
+                                    <span class="metro-search-icon">🔍</span>
+                                    <input type="text" id="f-metro-search" name="metro" value="{{ metro }}" placeholder="Начните вводить название станции..." autocomplete="off">
+                                    <div class="metro-dropdown" id="f-metro-dropdown"></div>
+                                </div>
+                                <div id="f-metro-selected-badge" class="metro-selected-badge u-hidden"></div>
+                            </div>
+                            <div class="field">
+                                <label>Поиск по деталям вакансии</label>
+                                <input type="text" name="details_query" value="{{ details_query }}" placeholder="Требования, условия, бонусы...">
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-group-title">Другие параметры</div>
+                            <div class="checkbox-group">
+                                <label class="checkbox"><input type="checkbox" name="with_address" value="1" {% if with_address %}checked{% endif %}> С адресом</label>
+                                <label class="checkbox"><input type="checkbox" name="with_contact_phone" value="1" {% if with_contact_phone %}checked{% endif %}> С контактным телефоном</label>
+                                <label class="checkbox"><input type="checkbox" name="accept_kids" value="1" {% if accept_kids %}checked{% endif %}> Доступные с 14 лет</label>
+                                <label class="checkbox"><input type="checkbox" name="label" value="temporary" {% if "temporary" in selected_labels %}checked{% endif %}> Подработка / временная</label>
+                                <label class="checkbox"><input type="checkbox" name="label" value="incomplete" {% if "incomplete" in selected_labels %}checked{% endif %}> Без полного резюме</label>
+                            </div>
+                            <div class="field vlist-mt-10">
+                                <label>Источник вакансий</label>
+                                <div class="radio-group">
+                                    <label class="radio"><input type="radio" name="source" value="" {% if not source %}checked{% endif %}> Все</label>
+                                    <label class="radio"><input type="radio" name="source" value="hh" {% if source == 'hh' %}checked{% endif %}> Только hh.ru</label>
+                                    <label class="radio"><input type="radio" name="source" value="local" {% if source == 'local' %}checked{% endif %}> Только размещённые на сайте</label>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="adv-actions">
+                        <button type="submit" class="btn-primary">Применить фильтры</button>
+                    </div>
+                </details>
+            </form>
+        </section>
+
+        <section class="results">
+            <div class="results-head">
+                <div>Найдено: <strong>{{ page_obj.paginator.count }}</strong> вакансий</div>
+                <div class="results-meta">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</div>
+            </div>
+
+            <div class="vacancies-grid">
+                {% for vacancy in vacancies %}
+                    <article class="vacancy-card" tabindex="0"
+                             data-employer-id="{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id }}{% else %}{% if vacancy.raw_json.employer %}{{ vacancy.raw_json.employer.id|default:'' }}{% endif %}{% endif %}">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    {% if vacancy.employer_logo_url %}
+                                        <img class="company-logo" src="{{ vacancy.employer_logo_url }}" alt="Логотип {{ vacancy.company }}">
+                                    {% else %}
+                                        <div class="company-placeholder">{{ vacancy.company|default:"?"|slice:":1"|upper }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="{% url 'vacancy-detail' vacancy.external_id %}">{{ vacancy.title }}</a>
+                                    <div class="v-company">{{ vacancy.company }}</div>
+                                </div>
+                            </div>
+                            <div class="v-formats">
+                                {% if vacancy.region %}<span class="badge badge-alt">📍 {{ vacancy.region }}</span>{% endif %}
+                                {% if vacancy.experience_name %}<span class="badge badge-alt">Опыт: {{ vacancy.experience_name }}</span>{% endif %}
+                                {% if vacancy.employment_name %}<span class="badge badge-alt">{{ vacancy.employment_name }}</span>{% endif %}
+                                {% if vacancy.schedule_name %}<span class="badge badge-alt">{{ vacancy.schedule_name }}</span>{% endif %}
+                                {% if vacancy.employment_form_name %}<span class="badge badge-alt">{{ vacancy.employment_form_name }}</span>{% endif %}
+                                {% for label in vacancy.work_formats_list %}
+                                    <span class="badge">{{ label }}</span>
+                                {% endfor %}
+                            </div>
+                            {% if vacancy.key_skills_text %}
+                                <div class="v-skills">{{ vacancy.key_skills_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                {% if vacancy.salary_from or vacancy.salary_to %}
+                                    {% salary_range vacancy.salary_from vacancy.salary_to vacancy.salary_currency %}
+                                {% else %}
+                                    <span class="muted">Зарплата не указана</span>
+                                {% endif %}
+                            </div>
+                            <div class="v-date" title="{{ vacancy.published_at|date:'d.m.Y H:i' }}">{{ vacancy.published_at|ru_timesince }}</div>
+                            <a class="btn-primary" href="{{ vacancy.url }}" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">{{ vacancy.title }}</div>
+                            <div class="placeholder-badges">
+                                {% if vacancy.schedule_name %}
+                                    <span class="badge badge-alt">{{ vacancy.schedule_name }}</span>
+                                {% endif %}
+                                {% if vacancy.employment_name %}
+                                    <span class="badge badge-alt">{{ vacancy.employment_name }}</span>
+                                {% endif %}
+                                {% if vacancy.employment_form_name %}
+                                    <span class="badge badge-alt">{{ vacancy.employment_form_name }}</span>
+                                {% endif %}
+                                {% for label in vacancy.work_formats_list %}
+                                    <span class="badge">{{ label }}</span>
+                                {% endfor %}
+                                {% if vacancy.is_internship %}
+                                    <span class="badge badge-accent">Стажировка</span>
+                                {% endif %}
+                                {% if vacancy.accept_temporary %}
+                                    <span class="badge badge-accent">Подработка</span>
+                                {% endif %}
+                                {% if vacancy.experience_name %}
+                                    <span class="badge">Опыт: {{ vacancy.experience_name }}</span>
+                                {% endif %}
+                            </div>
+                            {% if vacancy.salary_from or vacancy.salary_to %}
+                                <div class="placeholder-salary">
+                                    {% salary_range vacancy.salary_from vacancy.salary_to vacancy.salary_currency %}
+                                </div>
+                            {% endif %}
+                            <div class="placeholder-rating">
+                                <strong>Рейтинг:</strong>
+                                <span class="emp-rating-ph" data-hh-id="{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id }}{% elif vacancy.raw_json.employer.id %}{{ vacancy.raw_json.employer.id }}{% endif %}">⏳</span>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty">По вашему запросу вакансий не найдено. Попробуйте изменить параметры поиска.</div>
+                {% endfor %}
+            </div>
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="pager">
+                {% if page_obj.has_previous %}
+                    <a class="pager-link" href="?{{ filters_query }}{% if filters_query %}&{% endif %}page={{ page_obj.previous_page_number }}">← Назад</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a class="pager-link" href="?{{ filters_query }}{% if filters_query %}&{% endif %}page={{ page_obj.next_page_number }}">Вперёд →</a>
+                {% endif %}
+            </nav>
+            {% endif %}
+        </section>
+    </main>
+    <script src="{% static 'vacancies/js/theme.js' %}"></script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+    <script src="{% static 'vacancies/js/custom-select.js' %}"></script>
+    <script src="{% static 'vacancies/js/magic-trigger.js' %}"></script>
+<script>
+    // Точно такая же функция, как на детальной странице
+    function renderStars(val) {
+        var r = parseFloat(val);
+        if (isNaN(r) || r === 0) return '<span style="opacity:0.6; font-size:13px;">—</span>';
+        
+        r = Math.max(0, Math.min(5, r));
+        var n = Math.round(r);
+        var c = r >= 4 ? 'green' : r >= 2.5 ? 'orange' : 'red';
+        
+        var h = '<span class="star-rating clr-' + c + '">';
+        for (var i = 1; i <= 5; i++) {
+            h += '<span class="star ' + (i <= n ? 'filled' : 'empty') + '"></span>';
+        }
+        h += '</span><span class="rating-value clr-' + c + '">' + r.toFixed(1) + '</span>';
+        return h;
+    }
+
+    document.addEventListener('click', function(e) {
+        var card = e.target.closest('.vacancy-card');
+        if (!card) return;
+        
+        // Ищем элемент рейтинга внутри карточки
+        var el = card.querySelector('.emp-rating-ph');
+        if (!el || el.dataset.done) return; // Если уже загрузили, не повторяем
+        
+        el.dataset.done = '1';
+        var hid = el.dataset.hhId;
+        
+        if (!hid) { el.innerHTML = renderStars(null); return; }
+        
+        fetch('/api/employer-rating/' + encodeURIComponent(hid) + '/')
+            .then(function(r) { return r.json(); })
+            .then(function(d) { el.innerHTML = renderStars(d.rating); })
+            .catch(function()  { el.innerHTML = renderStars(null); });
+    });
+    </script>
+
+    <script>
+    (function(){
+        var citySel = document.getElementById('f-metro-city-select');
+        var searchInput = document.getElementById('f-metro-search');
+        var dropdown = document.getElementById('f-metro-dropdown');
+        var badge = document.getElementById('f-metro-selected-badge');
+        var regionSel = document.querySelector('select.search-region[name="region"]');
+        if (!citySel || !searchInput || !dropdown || !badge) return;
+
+        var metroData = null;
+        var metroCityLines = [];
+        var metroState = { stationId: '', stationName: '', lineName: '', lineColor: '', cityId: citySel.value || '' };
+
+        var METRO_CITY_MAP = [
+            [['москва', 'moscow'], '1'],
+            [['санкт', 'петербург', 'спб', 'saint'], '2'],
+            [['волгоград'], '3'],
+            [['нижний', 'новгород'], '4'],
+            [['новосибирск'], '5'],
+            [['самара'], '6'],
+            [['екатеринбург'], '7'],
+            [['казань'], '8']
+        ];
+
+        function esc(s){
+            return String(s || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function guessCityId(text){
+            var low = String(text || '').toLowerCase();
+            for (var i = 0; i < METRO_CITY_MAP.length; i++) {
+                var keys = METRO_CITY_MAP[i][0];
+                for (var j = 0; j < keys.length; j++) {
+                    if (low.indexOf(keys[j]) !== -1) return METRO_CITY_MAP[i][1];
+                }
+            }
+            return '';
+        }
+
+        function setStation(stationId, stationName, lineName, lineColor){
+            metroState.stationId = stationId || '';
+            metroState.stationName = stationName || '';
+            metroState.lineName = lineName || '';
+            metroState.lineColor = lineColor || '';
+            searchInput.value = metroState.stationName;
+            renderBadge();
+        }
+
+        function renderBadge(){
+            if (!metroState.stationName) {
+                badge.style.display = 'none';
+                badge.innerHTML = '';
+                return;
+            }
+            var col = metroState.lineColor ? ('#' + metroState.lineColor) : 'var(--accent)';
+            badge.innerHTML = '<span class="ms-dot" style="background:' + col + '"></span>'
+                + esc(metroState.stationName)
+                + (metroState.lineName ? ' <span style="color:var(--text-secondary);font-size:12px">(' + esc(metroState.lineName) + ')</span>' : '');
+            badge.style.display = 'inline-flex';
+        }
+
+        function applyCity(cityId){
+            metroCityLines = [];
+            metroState.cityId = cityId || '';
+            if (!metroData || !cityId) return;
+            for (var i = 0; i < metroData.length; i++) {
+                if (metroData[i].city_id === cityId) {
+                    metroCityLines = metroData[i].lines || [];
+                    break;
+                }
+            }
+        }
+
+        function selectItem(item){
+            setStation(
+                item.getAttribute('data-sid') || '',
+                item.getAttribute('data-name') || '',
+                item.getAttribute('data-line') || '',
+                item.getAttribute('data-color') || ''
+            );
+            dropdown.classList.remove('open');
+        }
+
+        function filterDropdown(query){
+            if (!citySel.value) {
+                dropdown.innerHTML = '<div class="metro-no-match">Сначала выберите город метро</div>';
+                dropdown.classList.add('open');
+                return;
+            }
+            var q = String(query || '').trim().toLowerCase();
+            if (!q) {
+                dropdown.innerHTML = '<div class="metro-no-match">Начните вводить название станции...</div>';
+                dropdown.classList.add('open');
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < metroCityLines.length; i++) {
+                var line = metroCityLines[i];
+                var lineMatches = [];
+                var stations = line.stations || [];
+                for (var j = 0; j < stations.length; j++) {
+                    var st = stations[j];
+                    var name = (st.name || '').toLowerCase();
+                    if (name.indexOf(q) !== -1) lineMatches.push(st);
+                }
+                if (!lineMatches.length) continue;
+                var col = line.hex_color ? ('#' + line.hex_color) : 'var(--accent)';
+                html += '<div class="metro-group-label"><span class="metro-line-dot" style="background:' + col + '"></span>' + esc(line.name) + '</div>';
+                lineMatches.forEach(function(st){
+                    html += '<div class="metro-station-item" data-sid="' + esc(st.id) + '" data-name="' + esc(st.name) + '" data-line="' + esc(line.name) + '" data-color="' + esc(line.hex_color || '') + '">'
+                        + '<span class="ms-dot" style="background:' + col + '"></span>' + esc(st.name) + '</div>';
+                });
+            }
+            if (!html) html = '<div class="metro-no-match">Станций не найдено</div>';
+            dropdown.innerHTML = html;
+            dropdown.classList.add('open');
+            dropdown.querySelectorAll('.metro-station-item').forEach(function(item){
+                item.addEventListener('click', function(){ selectItem(item); });
+            });
+        }
+
+        function initData(){
+            if (metroData) {
+                applyCity(citySel.value);
+                return;
+            }
+            fetch('/accounts/api/metro-data/', { credentials: 'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (!d || !d.ok) return;
+                    metroData = d.cities || [];
+                    var cityId = citySel.value;
+                    if (!cityId) {
+                        var regionGuess = regionSel ? guessCityId(regionSel.value) : '';
+                        cityId = regionGuess || '';
+                        if (cityId) citySel.value = cityId;
+                    }
+                    applyCity(cityId);
+                })
+                .catch(function(){});
+        }
+
+        citySel.addEventListener('change', function(){
+            setStation('', '', '', '');
+            searchInput.value = '';
+            applyCity(citySel.value);
+            dropdown.classList.remove('open');
+        });
+
+        searchInput.addEventListener('input', function(){
+            if (!this.value.trim()) setStation('', '', '', '');
+            filterDropdown(this.value);
+        });
+        searchInput.addEventListener('focus', function(){ filterDropdown(this.value); });
+        document.addEventListener('click', function(e){
+            if (!dropdown.contains(e.target) && e.target !== searchInput) dropdown.classList.remove('open');
+        });
+
+        initData();
+        if (searchInput.value.trim()) {
+            // Keep user's current text from query as selected station label.
+            setStation('', searchInput.value.trim(), '', '');
+        }
+    })();
+    </script>
+
+    <!-- ── Preset save modal ── -->
+    <div id="preset-modal" class="preset-modal-overlay u-hidden" role="dialog" aria-modal="true" aria-labelledby="preset-modal-title">
+        <div class="preset-modal">
+            <h3 id="preset-modal-title">Сохранить фильтр</h3>
+            <div class="field">
+                <label for="preset-name-input">Название пресета</label>
+                <input type="text" id="preset-name-input" placeholder="Например: Python разработчик" maxlength="100" autocomplete="off">
+            </div>
+            <label class="preset-modal-check">
+                <input type="checkbox" id="preset-from-profile-skills"> Добавить ключевые навыки из моего профиля
+            </label>
+            <div class="preset-modal-actions">
+                <button type="button" id="preset-modal-cancel" class="btn-secondary">Отмена</button>
+                <button type="button" id="preset-modal-save" class="btn-primary">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        var presetDataEl = document.getElementById('preset-data');
+        var presets = presetDataEl ? JSON.parse(presetDataEl.textContent) : [];
+        var presetsMap = {};
+        presets.forEach(function(p){ presetsMap[p.id] = p; });
+
+        var select   = document.getElementById('preset-select');
+        var applyBtn = document.getElementById('preset-apply');
+        var deleteBtn= document.getElementById('preset-delete');
+        var saveBtn  = document.getElementById('preset-save-btn');
+        var modal    = document.getElementById('preset-modal');
+        var nameInput= document.getElementById('preset-name-input');
+        var fromProfileCheck = document.getElementById('preset-from-profile-skills');
+        var cancelBtn= document.getElementById('preset-modal-cancel');
+        var saveConfirmBtn   = document.getElementById('preset-modal-save');
+        var form     = document.getElementById('filter-form');
+
+        if (!select || !form) return;
+
+        select.addEventListener('change', function(){
+            var hasVal = !!select.value;
+            applyBtn.disabled  = !hasVal;
+            deleteBtn.disabled = !hasVal;
+        });
+
+        applyBtn.addEventListener('click', function(){
+            var pid = parseInt(select.value, 10);
+            var preset = presetsMap[pid];
+            if (!preset) return;
+            applyFilters(preset.filters);
+        });
+
+        function applyFilters(filters) {
+            form.querySelectorAll('input[type=text], input[type=number]').forEach(function(el){
+                if (el.name) el.value = (filters[el.name] !== undefined ? filters[el.name] : '');
+            });
+            form.querySelectorAll('select').forEach(function(el){
+                if (!el.name) return;
+                var val = filters[el.name];
+                if (val === undefined || val === null) {
+                    el.value = '';
+                } else if (Array.isArray(val)) {
+                    Array.from(el.options).forEach(function(opt){ opt.selected = val.indexOf(opt.value) !== -1; });
+                } else {
+                    el.value = val;
+                }
+            });
+            form.querySelectorAll('input[type=checkbox]').forEach(function(el){
+                if (!el.name) return;
+                var val = filters[el.name];
+                if (Array.isArray(val)) {
+                    el.checked = val.indexOf(el.value) !== -1;
+                } else {
+                    el.checked = !!val;
+                }
+            });
+            form.querySelectorAll('input[type=radio]').forEach(function(el){
+                if (!el.name) return;
+                el.checked = (filters[el.name] === el.value);
+            });
+            form.submit();
+        }
+
+        deleteBtn.addEventListener('click', function(){
+            var pid = parseInt(select.value, 10);
+            var preset = presetsMap[pid];
+            if (!preset) return;
+            if (!confirm('Удалить пресет «' + preset.name + '»?')) return;
+            fetch('/accounts/api/presets/' + pid + '/', {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': getCsrf()},
+            }).then(function(r){ return r.json(); }).then(function(d){
+                if (d.ok) {
+                    var opt = select.querySelector('option[value="' + pid + '"]');
+                    if (opt) opt.remove();
+                    select.value = '';
+                    applyBtn.disabled  = true;
+                    deleteBtn.disabled = true;
+                    delete presetsMap[pid];
+                }
+            });
+        });
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function(){
+                modal.style.display = 'flex';
+                nameInput.value = '';
+                nameInput.focus();
+            });
+        }
+
+        if (cancelBtn) cancelBtn.addEventListener('click', function(){ modal.style.display = 'none'; });
+        modal.addEventListener('click', function(e){ if (e.target === modal) modal.style.display = 'none'; });
+
+        document.addEventListener('keydown', function(e){
+            if (e.key === 'Escape' && modal.style.display !== 'none') modal.style.display = 'none';
+        });
+
+        if (saveConfirmBtn) {
+            saveConfirmBtn.addEventListener('click', function(){
+                var name = nameInput.value.trim();
+                if (!name) { nameInput.focus(); return; }
+                var filters = collectFilters();
+                var payload = {
+                    name: name,
+                    filters: filters,
+                    from_profile_skills: !!(fromProfileCheck && fromProfileCheck.checked),
+                };
+                fetch('/accounts/api/presets/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+                    body: JSON.stringify(payload),
+                }).then(function(r){ return r.json(); }).then(function(d){
+                    if (d.ok) {
+                        modal.style.display = 'none';
+                        presetsMap[d.id] = d;
+                        var opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.text  = d.name;
+                        select.appendChild(opt);
+                        select.value = d.id;
+                        applyBtn.disabled  = false;
+                        deleteBtn.disabled = false;
+                    } else {
+                        alert('Ошибка: ' + (d.error || 'неизвестно'));
+                    }
+                }).catch(function(){ alert('Не удалось сохранить пресет.'); });
+            });
+        }
+
+        function collectFilters() {
+            var f = {};
+            var data = new FormData(form);
+            data.forEach(function(val, key){
+                if (key === 'csrfmiddlewaretoken') return;
+                if (f[key] !== undefined) {
+                    if (!Array.isArray(f[key])) f[key] = [f[key]];
+                    f[key].push(val);
+                } else {
+                    f[key] = val;
+                }
+            });
+            return f;
+        }
+
+        function getCsrf() {
+            var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+            return match ? match[1] : '';
+        }
+
+        function syncOptionCheckedState() {
+            form.querySelectorAll('label.checkbox, label.radio').forEach(function(option){
+                var input = option.querySelector('input[type="checkbox"], input[type="radio"]');
+                if (!input) return;
+                option.classList.toggle('is-checked', !!input.checked);
+            });
+        }
+
+        // Robust toggling for styled filter cards (checkbox/radio).
+        form.addEventListener('click', function(e){
+            var option = e.target.closest('label.checkbox, label.radio');
+            if (!option || !form.contains(option)) return;
+            var input = option.querySelector('input[type="checkbox"], input[type="radio"]');
+            if (!input) return;
+            if (e.target === input) return;
+
+            e.preventDefault();
+            if (input.type === 'checkbox') {
+                input.checked = !input.checked;
+            } else {
+                input.checked = true;
+            }
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            syncOptionCheckedState();
+        });
+
+        form.addEventListener('change', function(e){
+            var input = e.target;
+            if (!input || (input.type !== 'checkbox' && input.type !== 'radio')) return;
+            syncOptionCheckedState();
+        });
+
+        syncOptionCheckedState();
+    })();
+    </script>
+        {% include 'includes/site_footer.html' %}
+</body>
+</html>

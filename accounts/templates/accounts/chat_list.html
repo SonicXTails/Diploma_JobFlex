@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}JobFlex — Мои чаты{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'accounts/css/chat-list.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+{% endblock %}
+
+{% block content %}
+<main class="container container--wide">
+    <h2 class="page-title">Мои чаты</h2>
+
+    {% if chat_data %}
+        <div class="chat-list">
+            {% for item in chat_data %}
+                {% with other=item.other %}
+                <a class="chat-row" href="{% url 'accounts:chat_detail' item.chat.pk %}">
+                    <div class="chat-avatar">
+                        {% if item.other_avatar_url %}
+                            <img src="{{ item.other_avatar_url }}" alt="" loading="lazy">
+                        {% else %}
+                            {{ other.first_name|slice:":1"|upper|default:other.username|slice:":1"|upper }}{{ other.last_name|slice:":1"|upper }}
+                        {% endif %}
+                    </div>
+                    <div class="chat-body">
+                        <div class="chat-name">{{ other.get_full_name|default:other.username }}</div>
+                        <div class="chat-preview">
+                            {% if item.other_deleted %}
+                                <em style="color:#e6a817">Собеседник удалил чат</em>
+                            {% elif item.last_msg %}
+                                {% if item.last_msg.sender == request.user %}Вы: {% endif %}{{ item.last_msg.text|truncatechars:60 }}
+                            {% else %}
+                                Нет сообщений
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="chat-meta">
+                        {% if item.last_msg %}
+                            <div class="chat-time">{{ item.last_msg.created_at|date:"d.m H:i" }}</div>
+                        {% endif %}
+                        {% if item.unread %}
+                            <span class="chat-unread">{{ item.unread }}</span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty">У вас пока нет чатов. {% if request.user.manager %}Начните чат из страницы откликов на ваши вакансии.{% endif %}</div>
+    {% endif %}
+</main>
+{% endblock %}

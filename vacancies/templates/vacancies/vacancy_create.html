@@ -1,0 +1,816 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — {% if editing %}Редактировать вакансию{% else %}Новая вакансия{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function(){
+            try{
+                var key='site_theme', saved=localStorage.getItem(key);
+                if(saved==='dark'||(!saved&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))
+                    document.documentElement.classList.add('theme-dark');
+            }catch(e){}
+        })();
+    </script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    <link rel="stylesheet" href="https://mapgl.2gis.com/api/css">
+    <script src="https://mapgl.2gis.com/api/js/v1"></script>
+    
+    <link rel="stylesheet" href="{% static 'vacancies/css/vacancy-create.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="{% url 'vacancy-list' %}" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                <a class="btn-link" href="{% url 'my-vacancies' %}">Мои вакансии</a>
+                <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="vc-page">
+
+        {# ── Main form ── #}
+        <main class="vc-main">
+            <h2 class="vc-page-title">{% if editing %}Редактировать вакансию{% else %}Новая вакансия{% endif %}</h2>
+            <p class="vc-page-sub">Компания: <strong>{{ manager.company|default:manager.user.get_full_name }}</strong></p>
+
+            <form method="post" id="create-form" novalidate>
+                {% csrf_token %}
+
+                {# ── 1. Название и опыт ── #}
+                <section class="vc-section" id="section-name">
+                    <h3 class="vc-section-title">Название и опыт</h3>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Название *</label>
+                        <input type="text" name="title"
+                               class="vc-input {% if errors.title %}has-error{% endif %}"
+                               value="{{ form_data.title }}"
+                               placeholder="Например, Python-разработчик, Старший менеджер...">
+                        {% if errors.title %}<div class="vc-error">{{ errors.title }}</div>{% endif %}
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Компания *</label>
+                        <input type="text" name="company"
+                               class="vc-input {% if errors.company %}has-error{% endif %}"
+                               value="{{ form_data.company }}"
+                               placeholder="Название компании">
+                        {% if errors.company %}<div class="vc-error">{{ errors.company }}</div>{% endif %}
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Опыт работы</label>
+                        <span class="vc-hint">Если нужен опыт от нескольких месяцев до года, выберите «Нет опыта»</span>
+                        <div class="pill-group outlined">
+                            {% for eid, ename in experience_choices %}
+                            <div class="pill-opt">
+                                <input type="radio" name="experience_id" id="exp_{{ eid }}" value="{{ eid }}"
+                                       {% if form_data.experience_id == eid %}checked
+                                       {% elif forloop.first and not form_data.experience_id %}checked{% endif %}>
+                                <label for="exp_{{ eid }}">{{ ename }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </section>
+
+                {# ── 2. Условия работы ── #}
+                <section class="vc-section" id="section-conditions">
+                    <h3 class="vc-section-title">Условия работы</h3>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Какой сотрудник нужен</label>
+                        <div class="pill-group">
+                            <div class="pill-opt">
+                                <input type="radio" name="employee_type" id="emptype_perm" value="permanent"
+                                       {% if form_data.employee_type != 'temporary' %}checked{% endif %}>
+                                <label for="emptype_perm">Постоянный</label>
+                            </div>
+                            <div class="pill-opt">
+                                <input type="radio" name="employee_type" id="emptype_temp" value="temporary"
+                                       {% if form_data.employee_type == 'temporary' %}checked{% endif %}>
+                                <label for="emptype_temp">Временный</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Тип занятости</label>
+                        <div class="pill-group">
+                            <div class="pill-opt">
+                                <input type="radio" name="employment_id" id="empl_full" value="full"
+                                       {% if form_data.employment_id == 'full' or not form_data.employment_id %}checked{% endif %}>
+                                <label for="empl_full">Полная</label>
+                            </div>
+                            <div class="pill-opt">
+                                <input type="radio" name="employment_id" id="empl_part" value="part"
+                                       {% if form_data.employment_id == 'part' %}checked{% endif %}>
+                                <label for="empl_part">Частичная</label>
+                            </div>
+                            <div class="pill-opt">
+                                <input type="radio" name="employment_id" id="empl_shift" value="shift"
+                                       {% if form_data.employment_id == 'shift' %}checked{% endif %}>
+                                <label for="empl_shift">Вахта</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Формат работы</label>
+                        <div class="fmt-group">
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="is_onsite" id="fmt_on"
+                                       {% if form_data.is_onsite %}checked{% endif %}>
+                                <label for="fmt_on"><span class="fmt-box"></span>На месте работодателя</label>
+                            </div>
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="is_remote" id="fmt_rm"
+                                       {% if form_data.is_remote %}checked{% endif %}>
+                                <label for="fmt_rm"><span class="fmt-box"></span>Удалённо</label>
+                            </div>
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="is_hybrid" id="fmt_hy"
+                                       {% if form_data.is_hybrid %}checked{% endif %}>
+                                <label for="fmt_hy"><span class="fmt-box"></span>Гибрид</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Оформление сотрудника</label>
+                        <span class="vc-hint">Можно указать, чтобы собрать более подходящие отклики</span>
+                        <div class="tgl-row">
+                            <div class="tgl-info">
+                                <div class="tgl-title">Трудовой договор</div>
+                                <div class="tgl-sub">С отпускными, больничными и другими соцгарантиями</div>
+                            </div>
+                            <label class="sw">
+                                <input type="checkbox" name="contract_labor"
+                                       {% if form_data.contract_labor %}checked{% endif %}>
+                                <span class="sw-slider"></span>
+                            </label>
+                        </div>
+                        <div class="tgl-row">
+                            <div class="tgl-info">
+                                <div class="tgl-title">Стажировка</div>
+                                <div class="tgl-sub">Практика и обучение для начинающих. Не испытательный срок</div>
+                            </div>
+                            <label class="sw">
+                                <input type="checkbox" name="is_internship"
+                                       {% if form_data.is_internship %}checked{% endif %}>
+                                <span class="sw-slider"></span>
+                            </label>
+                        </div>
+                        <div class="tgl-row gpc-top">
+                            <div class="tgl-info">
+                                <div class="tgl-title">Договор ГПХ</div>
+                                <div class="tgl-sub">С оплатой только за результат</div>
+                            </div>
+                            <label class="sw">
+                                <input type="checkbox" name="contract_gpc" id="tgl-gpc"
+                                       {% if form_data.contract_gpc %}checked{% endif %}
+                                       onchange="document.getElementById('gpc-sub').classList.toggle('open',this.checked)">
+                                <span class="sw-slider"></span>
+                            </label>
+                        </div>
+                        <div class="gpc-sub {% if form_data.contract_gpc %}open{% endif %}" id="gpc-sub">
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="gpc_selfemployed" id="gpc_se">
+                                <label for="gpc_se"><span class="fmt-box"></span>с самозанятым</label>
+                            </div>
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="gpc_ip" id="gpc_ip">
+                                <label for="gpc_ip"><span class="fmt-box"></span>с ИП</label>
+                            </div>
+                            <div class="fmt-opt">
+                                <input type="checkbox" name="gpc_fl" id="gpc_fl">
+                                <label for="gpc_fl"><span class="fmt-box"></span>с физлицом</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <div class="tgl-row">
+                            <div class="tgl-info">
+                                <div class="tgl-title">Рассматривать кандидатов без опыта</div>
+                            </div>
+                            <label class="sw">
+                                <input type="checkbox" name="accept_incomplete_resumes"
+                                       {% if form_data.accept_incomplete_resumes %}checked{% endif %}>
+                                <span class="sw-slider"></span>
+                            </label>
+                        </div>
+                        <div class="tgl-row">
+                            <div class="tgl-info">
+                                <div class="tgl-title">Временная / проектная занятость</div>
+                            </div>
+                            <label class="sw">
+                                <input type="checkbox" name="accept_temporary"
+                                       {% if form_data.accept_temporary %}checked{% endif %}>
+                                <span class="sw-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                {# ── 3. График и часы работы ── #}
+                <section class="vc-section" id="section-schedule">
+                    <h3 class="vc-section-title">График и часы работы</h3>
+
+                    <div class="vc-field">
+                        <label class="vc-label">График работы</label>
+                        <span class="vc-hint">Как чередуются рабочие и выходные дни</span>
+                        <div class="chip-grid">
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws61" value="6/1" {% if '6/1' in form_data.work_schedule %}checked{% endif %}><label for="ws61">6/1</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws52" value="5/2" {% if '5/2' in form_data.work_schedule %}checked{% endif %}><label for="ws52">5/2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws44" value="4/4" {% if '4/4' in form_data.work_schedule %}checked{% endif %}><label for="ws44">4/4</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws43" value="4/3" {% if '4/3' in form_data.work_schedule %}checked{% endif %}><label for="ws43">4/3</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws42" value="4/2" {% if '4/2' in form_data.work_schedule %}checked{% endif %}><label for="ws42">4/2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws33" value="3/3" {% if '3/3' in form_data.work_schedule %}checked{% endif %}><label for="ws33">3/3</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws32" value="3/2" {% if '3/2' in form_data.work_schedule %}checked{% endif %}><label for="ws32">3/2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws22" value="2/2" {% if '2/2' in form_data.work_schedule %}checked{% endif %}><label for="ws22">2/2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws21" value="2/1" {% if '2/1' in form_data.work_schedule %}checked{% endif %}><label for="ws21">2/1</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws13" value="1/3" {% if '1/3' in form_data.work_schedule %}checked{% endif %}><label for="ws13">1/3</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="ws12" value="1/2" {% if '1/2' in form_data.work_schedule %}checked{% endif %}><label for="ws12">1/2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="wswe" value="По выходным" {% if 'По выходным' in form_data.work_schedule %}checked{% endif %}><label for="wswe">По выходным</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="wsfr" value="Свободный" {% if 'Свободный' in form_data.work_schedule %}checked{% endif %}><label for="wsfr">Свободный</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="wsch" id="wsot" value="Другое" {% if 'Другое' in form_data.work_schedule %}checked{% endif %}><label for="wsot">Другое</label></div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Рабочие часы в день</label>
+                        <div class="chip-grid">
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h2"  value="2"  {% if '2'  in form_data.hours_per_day %}checked{% endif %}><label for="h2">2</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h3"  value="3"  {% if '3'  in form_data.hours_per_day %}checked{% endif %}><label for="h3">3</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h4"  value="4"  {% if '4'  in form_data.hours_per_day %}checked{% endif %}><label for="h4">4</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h5"  value="5"  {% if '5'  in form_data.hours_per_day %}checked{% endif %}><label for="h5">5</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h6"  value="6"  {% if '6'  in form_data.hours_per_day %}checked{% endif %}><label for="h6">6</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h7"  value="7"  {% if '7'  in form_data.hours_per_day %}checked{% endif %}><label for="h7">7</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h8"  value="8"  {% if '8'  in form_data.hours_per_day %}checked{% endif %}><label for="h8">8</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h9"  value="9"  {% if '9'  in form_data.hours_per_day %}checked{% endif %}><label for="h9">9</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h10" value="10" {% if '10' in form_data.hours_per_day %}checked{% endif %}><label for="h10">10</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h11" value="11" {% if '11' in form_data.hours_per_day %}checked{% endif %}><label for="h11">11</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h12" value="12" {% if '12' in form_data.hours_per_day %}checked{% endif %}><label for="h12">12</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="h24" value="24" {% if '24' in form_data.hours_per_day %}checked{% endif %}><label for="h24">24</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="hneg" value="По договорённости" {% if 'По договорённости' in form_data.hours_per_day %}checked{% endif %}><label for="hneg">По договорённости</label></div>
+                            <div class="chip-opt"><input type="checkbox" name="hpd" id="hot"  value="Другое" {% if 'Другое' in form_data.hours_per_day %}checked{% endif %}><label for="hot">Другое</label></div>
+                        </div>
+                    </div>
+
+                    <div class="tgl-row">
+                        <div class="tgl-info"><div class="tgl-title">Есть вечерние или ночные смены</div></div>
+                        <label class="sw">
+                            <input type="checkbox" name="has_night_shifts"
+                                   {% if form_data.has_night_shifts %}checked{% endif %}>
+                            <span class="sw-slider"></span>
+                        </label>
+                    </div>
+                </section>
+
+                {# ── 4. Город и адрес ── #}
+                <section class="vc-section" id="section-address">
+                    <h3 class="vc-section-title">Город публикации и адрес работы</h3>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Город *</label>
+                        <span class="vc-hint">Вакансию увидят люди, которые там живут или готовы туда переехать</span>
+                        <input type="text" name="region"
+                               class="vc-input {% if errors.region %}has-error{% endif %}"
+                               value="{{ form_data.region }}"
+                               placeholder="Москва, Санкт-Петербург...">
+                        {% if errors.region %}<div class="vc-error">{{ errors.region }}</div>{% endif %}
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Где будет работать сотрудник</label>
+                        <span class="vc-hint">Укажите адрес — многие ищут работу у дома и исключают из поиска вакансии без адреса</span>
+                        <div class="map-wrap">
+                            <div class="map-bar">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                                </svg>
+                                <input type="text" id="address-input" name="address"
+                                       value="{{ form_data.address }}"
+                                       placeholder="Введите адрес...">
+                            </div>
+                            <div id="vacancy-map"></div>
+                        </div>
+                        <input type="hidden" name="lat" id="lat-field" value="{{ form_data.lat }}">
+                        <input type="hidden" name="lon" id="lon-field" value="{{ form_data.lon }}">
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Комментарий к адресу</label>
+                        <input type="text" name="address_comment" class="vc-input"
+                               value="{{ form_data.address_comment }}"
+                               placeholder="Например: 3 этаж, офис 301">
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Метро</label>
+                        <select id="vc-metro-city-select">
+                            <option value="">— Выберите город —</option>
+                            <option value="1">Москва</option>
+                            <option value="2">Санкт-Петербург</option>
+                            <option value="3">Екатеринбург</option>
+                            <option value="88">Казань</option>
+                            <option value="66">Нижний Новгород</option>
+                            <option value="4">Новосибирск</option>
+                            <option value="78">Самара</option>
+                            <option value="1002">Минск</option>
+                            <option value="160">Алматы</option>
+                        </select>
+                        <div id="vc-metro-city-wrap" style="display:none">
+                            <div class="metro-search-wrap">
+                                <span class="metro-search-icon">🔍</span>
+                                <input type="text" id="vc-metro-search"
+                                       placeholder="Начните вводить название станции…" autocomplete="off">
+                                <div class="metro-dropdown" id="vc-metro-dropdown"></div>
+                            </div>
+                            <div id="vc-metro-badge"></div>
+                        </div>
+                        <input type="hidden" name="metro_station_name" id="vc-metro-station-name" value="{{ form_data.metro_station_name }}">
+                        <input type="hidden" name="metro_line_name"    id="vc-metro-line-name"    value="{{ form_data.metro_line_name }}">
+                        <input type="hidden" name="metro_line_color"   id="vc-metro-line-color"   value="{{ form_data.metro_line_color|default:'' }}">
+                        <input type="hidden" name="metro_city_id"      id="vc-metro-city-id"      value="{{ form_data.metro_city_id|default:'' }}">
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Контактный телефон</label>
+                        <input type="tel" name="contact_phone" id="vc-contact-phone" class="vc-input"
+                               value="{{ form_data.contact_phone }}"
+                               placeholder="+7 (___) ___-__-__">
+                        {% if errors.contact_phone %}<div class="vc-error">{{ errors.contact_phone }}</div>{% endif %}
+                    </div>
+                </section>
+
+                {# ── 5. Оплата работы ── #}
+                <section class="vc-section" id="section-salary">
+                    <h3 class="vc-section-title">Оплата работы</h3>
+
+                    <div class="vc-field">
+                        <div class="salary-row">
+                            <input type="number" name="salary_from" class="vc-input"
+                                   value="{{ form_data.salary_from }}" placeholder="от" min="0" step="1000">
+                            <input type="number" name="salary_to" class="vc-input"
+                                   value="{{ form_data.salary_to }}" placeholder="до" min="0" step="1000">
+                            <select name="salary_currency" class="salary-sel">
+                                {% for cid, cname in currency_choices %}
+                                <option value="{{ cid }}" {% if form_data.salary_currency == cid %}selected{% endif %}>{{ cname }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="salary_period" class="salary-sel">
+                                <option value="month"   {% if form_data.salary_period == 'month'   or not form_data.salary_period %}selected{% endif %}>За месяц</option>
+                                <option value="hour"    {% if form_data.salary_period == 'hour'    %}selected{% endif %}>За час</option>
+                                <option value="project" {% if form_data.salary_period == 'project' %}selected{% endif %}>За проект</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <div class="pill-group vc-mb-20">
+                            <div class="pill-opt">
+                                <input type="radio" name="salary_gross" id="sg_gross" value="true"
+                                       {% if form_data.salary_gross != 'false' and form_data.salary_gross != False %}checked{% endif %}>
+                                <label for="sg_gross">До вычета налогов</label>
+                            </div>
+                            <div class="pill-opt">
+                                <input type="radio" name="salary_gross" id="sg_net" value="false"
+                                       {% if form_data.salary_gross == 'false' or form_data.salary_gross == False %}checked{% endif %}>
+                                <label for="sg_net">На руки</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Частота выплат</label>
+                        <div class="chip-grid">
+                            {% for val, lbl in payment_freq_choices %}
+                            <div class="chip-opt">
+                                <input type="radio" name="payment_frequency" id="pf_{{ val }}"
+                                       value="{{ val }}"
+                                       {% if form_data.payment_frequency == val %}checked{% endif %}>
+                                <label for="pf_{{ val }}">{{ lbl }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </section>
+
+                {# ── 6. Описание вакансии ── #}
+                <section class="vc-section" id="section-description">
+                    <h3 class="vc-section-title">Описание вакансии</h3>
+
+                    <div class="vc-field">
+                        <textarea name="description" class="vc-textarea"
+                                  placeholder="Обязанности:&#10;—&#10;&#10;Требования:&#10;—&#10;&#10;Условия:&#10;—">{{ form_data.description }}</textarea>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Навыки</label>
+                        <span class="vc-hint">Рекомендуем указать до 15 ключевых навыков</span>
+                        <input type="hidden" name="key_skills" id="key-skills-hidden" value="{{ form_data.key_skills }}">
+                        <div class="skills-tag-input" id="skills-tag-input">
+                            <input class="skill-tag-add-input" id="skill-input" type="text"
+                                   placeholder="Введите навык и нажмите Enter или запятую…" autocomplete="off">
+                        </div>
+                        <div class="skills-suggestions" id="skills-suggestions"></div>
+                    </div>
+
+                    <div class="vc-field">
+                        <label class="vc-label">Льготы и преимущества</label>
+                        <textarea name="benefits_text" class="vc-textarea vc-textarea-sm"
+                                  placeholder="ДМС, корпоративное питание, обучение за счёт компании...">{{ form_data.benefits_text }}</textarea>
+                    </div>
+                </section>
+
+                {# ── Actions ── #}
+                <div class="vc-actions">
+                    <button type="submit" class="btn-pub">
+                        {% if editing %}💾 Сохранить изменения{% else %}🚀 Опубликовать вакансию{% endif %}
+                    </button>
+                    <a href="{% if editing %}{% url 'vacancy-detail' vacancy.external_id %}{% else %}{% url 'my-vacancies' %}{% endif %}"
+                       class="btn-cancel">Отмена</a>
+                    {% if editing %}
+                    <form method="post" action="{% url 'vacancy-delete' vacancy.pk %}"
+                          id="delete-form" class="vc-delete-form">
+                        {% csrf_token %}
+                        <button type="button" class="btn-del" onclick="confirmDelete()">🗑 Удалить</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </form>
+        </main>
+
+        {# ── Sticky sidebar ── #}
+        <aside class="vc-sidebar-col">
+            <nav class="vc-sidebar">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-name"></div><div class="nav-line" id="ln-name"></div></div>
+                        <span class="nav-lbl" id="lbl-name" onclick="navGo('section-name')">Название и опыт</span>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-conditions"></div><div class="nav-line" id="ln-conditions"></div></div>
+                        <span class="nav-lbl" id="lbl-conditions" onclick="navGo('section-conditions')">Условия</span>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-schedule"></div><div class="nav-line" id="ln-schedule"></div></div>
+                        <span class="nav-lbl" id="lbl-schedule" onclick="navGo('section-schedule')">График</span>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-address"></div><div class="nav-line" id="ln-address"></div></div>
+                        <span class="nav-lbl" id="lbl-address" onclick="navGo('section-address')">Адрес</span>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-salary"></div><div class="nav-line" id="ln-salary"></div></div>
+                        <span class="nav-lbl" id="lbl-salary" onclick="navGo('section-salary')">Оплата работы</span>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-spine"><div class="nav-dot" id="dot-description"></div></div>
+                        <span class="nav-lbl" id="lbl-description" onclick="navGo('section-description')">Описание</span>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+    </div>{# /vc-page #}
+
+    <script>
+    // ── Russian phone mask ──────────────────────────────────
+    (function(){
+        function applyRuPhoneMask(el) {
+            if (!el) return;
+            el.placeholder = '+7 (___) ___-__-__';
+            function fmt(v) {
+                var d = v.replace(/\D/g, '');
+                if (d.startsWith('8')) d = '7' + d.slice(1);
+                if (d && !d.startsWith('7')) d = '7' + d;
+                d = d.slice(0, 11);
+                var r = '';
+                if (d.length > 0) r = '+7';
+                if (d.length > 1) r += ' (' + d.slice(1, 4);
+                if (d.length >= 4) r += ')';
+                if (d.length > 4) r += ' ' + d.slice(4, 7);
+                if (d.length > 7) r += '-' + d.slice(7, 9);
+                if (d.length > 9) r += '-' + d.slice(9, 11);
+                return r;
+            }
+            // Count digits in string up to position pos
+            function digitsUpTo(s, pos) {
+                var count = 0;
+                for (var i = 0; i < pos && i < s.length; i++) {
+                    if (/\d/.test(s[i])) count++;
+                }
+                return count;
+            }
+            // Find position in formatted string after nth digit
+            function posAfterNthDigit(s, n) {
+                var count = 0;
+                for (var i = 0; i < s.length; i++) {
+                    if (/\d/.test(s[i])) { count++; if (count === n) return i + 1; }
+                }
+                return s.length;
+            }
+            el.addEventListener('input', function() {
+                var before = this.selectionStart;
+                var digits = digitsUpTo(this.value, before);
+                this.value = fmt(this.value);
+                var newPos = digits === 0 ? this.value.length : posAfterNthDigit(this.value, digits);
+                try { this.setSelectionRange(newPos, newPos); } catch(e) {}
+            });
+            el.addEventListener('focus', function() { if (!this.value) this.value = '+7 ('; });
+            el.addEventListener('blur',  function() { if (/^\+7\s?\(?$/.test(this.value.trim())) this.value = ''; });
+            el.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && /^\+7\s?\(?$/.test(this.value.trim())) { this.value=''; e.preventDefault(); }
+            });
+        }
+        applyRuPhoneMask(document.getElementById('vc-contact-phone'));
+    })();
+
+    // ── Theme toggle ─────────────────────────────────────
+    (function(){
+        const btn = document.getElementById('theme-toggle');
+        if(!btn) return;
+        btn.textContent = document.documentElement.classList.contains('theme-dark') ? '☀️' : '🌙';
+        btn.addEventListener('click', function(){
+            const dark = document.documentElement.classList.toggle('theme-dark');
+            try{ localStorage.setItem('site_theme', dark ? 'dark' : 'light'); }catch(e){}
+            this.textContent = dark ? '☀️' : '🌙';
+        });
+    })();
+
+    // ── Sidebar nav ──────────────────────────────────────
+    function navGo(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        var hdr = document.querySelector('.site-header');
+        var offset = (hdr ? hdr.offsetHeight : 0) + 20;
+        var top = el.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({top: top, behavior: 'smooth'});
+    }
+    (function(){
+        const ids = ['name','conditions','schedule','address','salary','description'];
+        var hdrH = (document.querySelector('.site-header')||{offsetHeight:0}).offsetHeight;
+        const obs = new IntersectionObserver(function(entries){
+            entries.forEach(function(e){
+                const id = e.target.id.replace('section-','');
+                const dot=document.getElementById('dot-'+id);
+                const lbl=document.getElementById('lbl-'+id);
+                const ln =document.getElementById('ln-'+id);
+                if(!dot||!lbl) return;
+                if(e.isIntersecting){
+                    dot.className='nav-dot active'; lbl.className='nav-lbl active';
+                    if(ln) ln.className='nav-line done';
+                } else {
+                    if(e.target.getBoundingClientRect().top<0){
+                        dot.className='nav-dot done'; lbl.className='nav-lbl done';
+                        if(ln) ln.className='nav-line done';
+                    } else {
+                        dot.className='nav-dot'; lbl.className='nav-lbl';
+                        if(ln) ln.className='nav-line';
+                    }
+                }
+            });
+        },{threshold:0.15, rootMargin: '-' + hdrH + 'px 0px 0px 0px'});
+        ids.forEach(function(id){ const el=document.getElementById('section-'+id); if(el) obs.observe(el); });
+    })();
+
+    // ── Collect chip checkboxes → hidden field ───────────
+    (function(){
+        function sync(name, hname){
+            const vals = Array.from(document.querySelectorAll('input[name="'+name+'"]:checked')).map(i=>i.value);
+            let h = document.querySelector('input[name="'+hname+'"]');
+            if(!h){ h=document.createElement('input'); h.type='hidden'; h.name=hname; document.getElementById('create-form').appendChild(h); }
+            h.value = vals.join(', ');
+        }
+        [['wsch','work_schedule'],['hpd','hours_per_day']].forEach(function(p){
+            document.querySelectorAll('input[name="'+p[0]+'"]').forEach(function(inp){
+                inp.addEventListener('change', function(){ sync(p[0],p[1]); });
+            });
+            sync(p[0],p[1]);
+        });
+    })();
+
+    // ── Skills tag input ─────────────────────────────────
+    var SUGGESTED_SKILLS = [
+        'Microsoft Office','Excel','Word','PowerPoint','1С','Python','SQL','JavaScript',
+        'HTML/CSS','Git','Photoshop','AutoCAD','Figma','Jira','Trello','Agile/Scrum',
+        'Управление проектами','Работа с клиентами','Деловая переписка','Английский язык',
+        'Анализ данных','Бухгалтерский учёт','Продажи','Холодные звонки','Коммуникабельность'
+    ];
+    var addedSkills = (function(){
+        var h = document.getElementById('key-skills-hidden').value;
+        return h ? h.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+    })();
+    var tagInput      = document.getElementById('skills-tag-input');
+    var skillInp      = document.getElementById('skill-input');
+    var suggsContainer = document.getElementById('skills-suggestions');
+    var hiddenSkills   = document.getElementById('key-skills-hidden');
+
+    function syncHidden(){ hiddenSkills.value = addedSkills.join(', '); }
+
+    function renderSuggestions(){
+        suggsContainer.innerHTML = '';
+        SUGGESTED_SKILLS.forEach(function(s){
+            var chip = document.createElement('span');
+            chip.className = 'skill-suggestion' + (addedSkills.indexOf(s) !== -1 ? ' is-added' : '');
+            chip.textContent = s;
+            chip.addEventListener('click', function(){ vcAddSkill(s); });
+            suggsContainer.appendChild(chip);
+        });
+    }
+
+    function vcAddSkill(name){
+        name = name.trim();
+        if (!name || addedSkills.indexOf(name) !== -1) return;
+        addedSkills.push(name);
+        var tag = document.createElement('span');
+        tag.className = 'skill-tag';
+        tag.textContent = name;
+        var rm = document.createElement('button');
+        rm.type = 'button'; rm.className = 'skill-tag__remove'; rm.title = 'Удалить'; rm.textContent = '×';
+        rm.addEventListener('click', function(){
+            var idx = addedSkills.indexOf(name);
+            if (idx !== -1) addedSkills.splice(idx, 1);
+            tag.remove(); syncHidden(); renderSuggestions();
+        });
+        tag.appendChild(rm);
+        tagInput.insertBefore(tag, skillInp);
+        skillInp.value = ''; syncHidden(); renderSuggestions();
+    }
+
+    // Pre-populate tags from existing value
+    addedSkills.slice().forEach(function(s){
+        addedSkills = addedSkills.filter(function(x){ return x !== s; });
+        vcAddSkill(s);
+    });
+
+    skillInp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); vcAddSkill(this.value); }
+        if (e.key === 'Backspace' && !this.value && addedSkills.length){
+            var last = addedSkills[addedSkills.length - 1];
+            var tags = tagInput.querySelectorAll('.skill-tag');
+            if (tags.length) tags[tags.length - 1].remove();
+            addedSkills.pop(); syncHidden(); renderSuggestions();
+        }
+    });
+    skillInp.addEventListener('blur', function(){ if (this.value.trim()) vcAddSkill(this.value); });
+    tagInput.addEventListener('click', function(){ skillInp.focus(); });
+    renderSuggestions();
+
+    // ── Metro picker ─────────────────────────────────────
+    (function(){
+        var citySelect   = document.getElementById('vc-metro-city-select');
+        var cityWrap     = document.getElementById('vc-metro-city-wrap');
+        var searchInput  = document.getElementById('vc-metro-search');
+        var dropdown     = document.getElementById('vc-metro-dropdown');
+        var badge        = document.getElementById('vc-metro-badge');
+        var stationField = document.getElementById('vc-metro-station-name');
+        var lineField    = document.getElementById('vc-metro-line-name');
+        var colorField   = document.getElementById('vc-metro-line-color');
+
+        if (!citySelect) return;
+
+        var _metroData = null;
+        var _lines = [];
+        var _state = { sid: '', sname: stationField.value, lname: lineField.value, lcolor: colorField.value };
+
+        function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+        function renderBadge(){
+            if (_state.sname){
+                var col = _state.lcolor ? '#'+_state.lcolor.replace('#','') : '#e42313';
+                badge.innerHTML = '<span class="ms-dot" style="background:'+col+'"></span>'+esc(_state.sname)
+                    +(_state.lname ? ' <span style="opacity:.7;font-size:12px">('+esc(_state.lname)+')</span>' : '');
+                badge.classList.add('show');
+            } else {
+                badge.classList.remove('show');
+                badge.innerHTML = '';
+            }
+        }
+
+        function setStation(sid, sname, lname, lcolor){
+            _state = {sid:sid, sname:sname, lname:lname, lcolor:lcolor};
+            stationField.value = sname;
+            lineField.value    = lname;
+            colorField.value   = lcolor;
+            if (searchInput) searchInput.value = sname;
+            renderBadge();
+        }
+
+        function filterDropdown(q){
+            q = (q||'').toLowerCase().trim();
+            var html = '';
+            if (!q){
+                dropdown.innerHTML = '<div class="metro-no-match">Начните вводить название станции…</div>';
+                dropdown.classList.add('open'); return;
+            }
+            for (var i = 0; i < _lines.length; i++){
+                var line = _lines[i];
+                var matched = line.stations.filter(function(s){ return s.name.toLowerCase().indexOf(q) !== -1; });
+                if (!matched.length) continue;
+                var col = '#'+(line.hex_color||'aaa');
+                html += '<div class="metro-group-label"><span class="metro-line-dot" style="background:'+col+'"></span>'+esc(line.name)+'</div>';
+                matched.forEach(function(st){
+                    html += '<div class="metro-station-item" data-sid="'+esc(st.id)+'" data-name="'+esc(st.name)+'" data-line="'+esc(line.name)+'" data-color="'+esc(line.hex_color||'')+'">'
+                        +'<span class="ms-dot" style="background:'+col+'"></span>'+esc(st.name)+'</div>';
+                });
+            }
+            if (!html) html = '<div class="metro-no-match">Станций не найдено</div>';
+            dropdown.innerHTML = html;
+            dropdown.classList.add('open');
+            dropdown.querySelectorAll('.metro-station-item').forEach(function(item){
+                item.addEventListener('mousedown', function(e){
+                    e.preventDefault();
+                    setStation(this.dataset.sid, this.dataset.name, this.dataset.line, this.dataset.color);
+                    dropdown.classList.remove('open');
+                });
+            });
+        }
+
+        function loadAndInit(cityId){
+            if (_metroData){
+                _lines = [];
+                for (var i=0;i<_metroData.length;i++){ if (_metroData[i].city_id===cityId){ _lines=_metroData[i].lines; break; } }
+                return;
+            }
+            fetch('{% url "accounts:api_metro_data" %}', {credentials:'same-origin'})
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.ok){ _metroData = d.cities;
+                        for (var i=0;i<_metroData.length;i++){ if (_metroData[i].city_id===cityId){ _lines=_metroData[i].lines; break; } }
+                    }
+                });
+        }
+
+        citySelect.addEventListener('change', function(){
+            var cid = this.value;
+            setStation('','','','');
+            var cityIdField = document.getElementById('vc-metro-city-id');
+            if (cityIdField) cityIdField.value = cid;
+            if (cid){ cityWrap.style.display=''; loadAndInit(cid); }
+            else { cityWrap.style.display='none'; }
+        });
+
+        searchInput.addEventListener('input', function(){ filterDropdown(this.value); });
+        searchInput.addEventListener('focus', function(){ filterDropdown(this.value); });
+        searchInput.addEventListener('blur',  function(){ setTimeout(function(){ dropdown.classList.remove('open'); }, 150); });
+        searchInput.addEventListener('input', function(){ if (!this.value.trim()) setStation('','','',''); });
+
+        // Restore state on edit
+        if (_state.sname){
+            var _savedCityId = (document.getElementById('vc-metro-city-id') || {}).value || '1';
+            citySelect.value = _savedCityId;
+            cityWrap.style.display = '';
+            loadAndInit(_savedCityId);
+            renderBadge();
+        }
+    })();
+
+    // ── Delete ───────────────────────────────────────────
+    function confirmDelete(){
+        if(confirm('Удалить вакансию? Это действие нельзя отменить.'))
+            document.getElementById('delete-form').submit();
+    }
+
+    // ── 2GIS Map ─────────────────────────────────────────
+    (function(){
+        const KEY='{{ dgis_api_key }}';
+        const latF=document.getElementById('lat-field');
+        const lonF=document.getElementById('lon-field');
+        const addrI=document.getElementById('address-input');
+        const mapEl=document.getElementById('vacancy-map');
+        if(!mapEl||typeof mapgl==='undefined') return;
+        const iLat=parseFloat(latF.value)||55.7522;
+        const iLon=parseFloat(lonF.value)||37.6156;
+        const map=new mapgl.Map('vacancy-map',{center:[iLon,iLat],zoom:latF.value?15:10,key:KEY});
+        const marker=new mapgl.Marker(map,{coordinates:[iLon,iLat],draggable:true});
+        marker.on('dragend',function(e){ const c=e.target.getCoordinates(); lonF.value=c[0].toFixed(6); latF.value=c[1].toFixed(6); });
+        addrI.addEventListener('blur',function(){
+            const q=this.value.trim(); if(!q) return;
+            fetch('https://catalog.api.2gis.com/3.0/items/geocode?q='+encodeURIComponent(q)+'&fields=items.point&key='+KEY)
+                .then(r=>r.json()).then(function(d){
+                    const item=d&&d.result&&d.result.items&&d.result.items[0];
+                    if(item&&item.point){ const ln=item.point.lon,la=item.point.lat; lonF.value=ln.toFixed(6); latF.value=la.toFixed(6); map.setCenter([ln,la]); map.setZoom(15); marker.setCoordinates([ln,la]); }
+                }).catch(function(){});
+        });
+    })();
+    </script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+    {% include 'includes/site_footer.html' %}
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Чат с {{ other.get_full_name|default:other.username }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'accounts/css/chat-detail.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+<header class="site-header">
+    <div class="container header-inner">
+        <a href="/" class="logo">
+            <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+            <span class="logo-text">JobFlex</span>
+        </a>
+        <div class="header-actions">
+            <a class="btn-link" href="{% url 'accounts:chat_list' %}">Все чаты</a>
+            <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+            <button id="delete-chat-btn" class="btn u-btn-danger-outline" title="Удалить чат">🗑 Удалить чат</button>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+        </div>
+    </div>
+</header>
+
+<main class="container container--wide">
+<div class="chat-layout">
+    <!-- Header -->
+    <div class="chat-header">
+        <a class="chat-back" href="{% url 'accounts:chat_list' %}" title="Назад">←</a>
+        <div class="chat-avatar-sm">
+            {% if other_avatar_url %}
+                <img src="{{ other_avatar_url }}" alt="" loading="lazy">
+            {% else %}
+                {{ other.first_name|slice:":1"|upper|default:other.username|slice:":1"|upper }}{{ other.last_name|slice:":1"|upper }}
+            {% endif %}
+        </div>
+        <div>
+            <div class="chat-header-name">{{ other.get_full_name|default:other.username }}</div>
+            {% if other.applicant.city %}<div class="chat-header-sub">📍 {{ other.applicant.city }}</div>{% endif %}
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages-area" id="messages-area">
+        {% for msg in messages %}
+            <div class="msg-row {% if msg.sender == request.user %}mine{% else %}theirs{% endif %}" data-id="{{ msg.pk }}">
+                <div class="msg-bubble">
+                    {% if msg.file %}
+                        {% if msg.file_is_image %}
+                            <img class="msg-img" src="{{ msg.file.url }}" alt="фото" loading="lazy">
+                        {% else %}
+                            <a class="msg-file" href="{{ msg.file.url }}" target="_blank" download>📎 {{ msg.file_basename|truncatechars:50 }}</a>
+                        {% endif %}
+                    {% endif %}
+                    {% if msg.text %}{{ msg.text|linebreaksbr }}{% endif %}
+                    <div class="msg-time">{{ msg.created_at|date:"d.m H:i" }}</div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="empty-chat" id="empty-hint">Начните переписку — напишите первое сообщение</div>
+        {% endfor %}
+    </div>
+
+    <!-- File preview strip (shown when file is attached) -->
+    <div id="file-preview">
+        <img id="file-preview-img" src="" alt="">
+        <span id="file-preview-name"></span>
+        <span id="file-remove" title="Убрать файл">×</span>
+    </div>
+
+    {% if other_deleted %}
+    <!-- Banner: other party deleted -->
+    <div id="other-deleted-banner" class="u-warning-banner">
+        {{ other.get_full_name|default:other.username }} удалил(а) этот чат.
+        Отправка сообщений недоступна.
+    </div>
+    {% endif %}
+
+    <!-- Quick-reply templates (manager only) -->
+    {% if is_manager and not other_deleted %}
+    <div class="quick-replies">
+        <button class="quick-reply-btn" data-status="accepted" data-text="Здравствуйте! Мы готовы пригласить вас на собеседование. Когда вам удобно встретиться?">✅ Приглашение</button>
+        <button class="quick-reply-btn" data-status="viewed"   data-text="Здравствуйте! Ваше резюме получено и рассмотрено. Мы свяжемся с вами в ближайшее время.">👁 Рассмотрено</button>
+        <button class="quick-reply-btn" data-status="rejected" data-text="Здравствуйте! К сожалению, ваша кандидатура не подходит для данной позиции. Спасибо за интерес к нашей компании.">❌ Отказ</button>
+        <button class="quick-reply-btn"                        data-text="Здравствуйте! Просим вас предоставить дополнительную информацию: portfolio, рекомендации или иные документы.">📎 Доп. информация</button>
+    </div>
+    {% endif %}
+
+    <!-- Input -->
+    <div class="chat-input-bar">
+        {% if not other_deleted %}
+        <button id="attach-btn" title="Прикрепить файл">📎</button>
+        <input type="file" id="file-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt" class="u-hidden">
+        {% endif %}
+        <textarea id="msg-input" rows="1"
+            {% if other_deleted %}disabled placeholder="Собеседник удалил чат"{% else %}placeholder="Напишите сообщение…"{% endif %}
+        ></textarea>
+        <button class="btn-primary" id="send-btn" {% if other_deleted %}disabled{% endif %}>Отправить</button>
+    </div>
+    <div class="send-error" id="send-error"></div>
+</div>
+</main>
+
+<!-- Light-box -->
+<div id="lightbox"><span id="lightbox-close">&times;</span><img src="" alt=""></div>
+
+<script src="{% static 'vacancies/js/theme.js' %}"></script>
+<script src="{% static 'vacancies/js/macros.js' %}"></script>
+<script>
+'use strict';
+var CHAT_ID   = {{ chat.pk }};
+var ME_ID     = {{ request.user.pk }};
+var SEND_URL  = '{% url "accounts:api_chat_send" chat.pk %}';
+var POLL_URL  = '{% url "accounts:api_chat_messages" chat.pk %}';
+var CSRF      = '{{ csrf_token }}';
+var APPLICATION_ID = {{ application.pk|default:"null" }};
+
+var area      = document.getElementById('messages-area');
+var input     = document.getElementById('msg-input');
+var sendBtn   = document.getElementById('send-btn');
+var errEl     = document.getElementById('send-error');
+var fileInput = document.getElementById('file-input');
+var filePrev  = document.getElementById('file-preview');
+var prevImg   = document.getElementById('file-preview-img');
+var prevName  = document.getElementById('file-preview-name');
+
+var DELETE_URL = '{% url "accounts:api_chat_delete" chat.pk %}';
+
+/* ── Attach button & file preview ─────────────────── */
+if (fileInput) {
+    document.getElementById('attach-btn').addEventListener('click', function(){
+        fileInput.click();
+    });
+    fileInput.addEventListener('change', function(){
+        var f = fileInput.files[0];
+        if (!f) return;
+        prevName.textContent = f.name;
+        filePrev.style.display = 'flex';
+        if (f.type.startsWith('image/')) {
+            prevImg.src = URL.createObjectURL(f);
+            prevImg.style.display = 'block';
+        } else {
+            prevImg.style.display = 'none';
+        }
+    });
+    document.getElementById('file-remove').addEventListener('click', function(){
+        fileInput.value = '';
+        filePrev.style.display = 'none';
+        prevImg.src = '';
+    });
+}
+
+/* ── Light-box ────────────────────────────────────── */
+var lb    = document.getElementById('lightbox');
+var lbImg = lb ? lb.querySelector('img') : null;
+if (lb) {
+    document.getElementById('lightbox-close').addEventListener('click', function(){
+        lb.classList.remove('open'); lbImg.src = '';
+    });
+    lb.addEventListener('click', function(e){
+        if (e.target === lb) { lb.classList.remove('open'); lbImg.src = ''; }
+    });
+}
+function openLightbox(src) { if (lb) { lbImg.src = src; lb.classList.add('open'); } }
+
+/* ── Delete chat ──────────────────────────────────── */
+document.getElementById('delete-chat-btn').addEventListener('click', function(){
+    if (!confirm('Удалить чат? Он исчезнет из вашего списка. Собеседник всё ещё увидит историю.')) return;
+    var btn = this;
+    btn.disabled = true;
+    fetch(DELETE_URL, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF }
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (d.ok) window.location = '{% url "accounts:chat_list" %}';
+        else { btn.disabled = false; alert('Ошибка удаления.'); }
+    })
+    .catch(function(){ btn.disabled = false; alert('Сетевая ошибка.'); });
+});
+
+/* ── Scroll to bottom ─────────────────────────────── */
+function scrollBottom() { area.scrollTop = area.scrollHeight; }
+scrollBottom();
+
+/* ── Image extension check ────────────────────────── */
+var IMG_EXTS = /\.(jpe?g|png|gif|bmp|webp|svg)$/i;
+function isImage(name) { return name && IMG_EXTS.test(name); }
+
+/* ── Render message bubble ────────────────────────── */
+function appendMsg(m) {
+    var hint = document.getElementById('empty-hint');
+    if (hint) hint.remove();
+
+    var row = document.createElement('div');
+    row.className = 'msg-row ' + (m.is_mine ? 'mine' : 'theirs');
+    row.setAttribute('data-id', m.id);
+
+    var inner = '';
+
+    if (m.file_url) {
+        if (isImage(m.file_name)) {
+            inner += '<img class="msg-img" src="' + m.file_url + '" alt="фото" loading="lazy">';
+        } else {
+            var safeName = (m.file_name || 'файл')
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            inner += '<a class="msg-file" href="' + m.file_url
+                   + '" target="_blank" download>📎 ' + safeName + '</a>';
+        }
+    }
+
+    if (m.text) {
+        inner += m.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                       .replace(/\n/g,'<br>');
+    }
+
+    inner += '<div class="msg-time">' + m.created_at + '</div>';
+    row.innerHTML = '<div class="msg-bubble">' + inner + '</div>';
+
+    var img = row.querySelector('.msg-img');
+    if (img) img.addEventListener('click', function(){ openLightbox(this.src); });
+
+    area.appendChild(row);
+    scrollBottom();
+}
+
+// Wire lightbox for images already on the page (initial load)
+area.querySelectorAll('.msg-img').forEach(function(img){
+    img.addEventListener('click', function(){ openLightbox(this.src); });
+});
+
+/* ── Last known id ────────────────────────────────── */
+function lastId() {
+    var rows = area.querySelectorAll('[data-id]');
+    return rows.length ? parseInt(rows[rows.length - 1].getAttribute('data-id')) : 0;
+}
+
+/* ── Send message ─────────────────────────────────── */
+function sendMsg() {
+    var text = input.value.trim();
+    var file = fileInput ? fileInput.files[0] : null;
+    if (!text && !file) return;
+
+    sendBtn.disabled = true;
+    errEl.style.display = 'none';
+
+    var body, headers = { 'X-CSRFToken': CSRF };
+    if (file) {
+        body = new FormData();
+        if (text) body.append('text', text);
+        body.append('file', file);
+    } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify({ text: text });
+    }
+
+    fetch(SEND_URL, { method: 'POST', credentials: 'same-origin', headers: headers, body: body })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        sendBtn.disabled = false;
+        if (d.ok) {
+            input.value = ''; input.style.height = '';
+            if (fileInput) { fileInput.value = ''; filePrev.style.display = 'none'; prevImg.src = ''; }
+            appendMsg(d.message);
+        } else {
+            errEl.textContent = d.error === 'file_too_large'
+                ? 'Файл слишком большой (макс. 20 МБ).' : 'Ошибка отправки.';
+            errEl.style.display = '';
+        }
+    })
+    .catch(function(){
+        sendBtn.disabled = false;
+        errEl.textContent = 'Сетевая ошибка.';
+        errEl.style.display = '';
+    });
+}
+
+if (sendBtn && !sendBtn.disabled) {
+    sendBtn.addEventListener('click', sendMsg);
+    input.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+    });
+}
+
+/* ── Auto-resize textarea ─────────────────────────── */
+if (input) input.addEventListener('input', function(){
+    this.style.height = '';
+    this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+
+/* ── Quick-reply templates ──────────────────────── */
+document.querySelectorAll('.quick-reply-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+        input.value = this.dataset.text;
+        input.style.height = '';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+        input.focus();
+        // Update application status if this button has a mapped status
+        var newStatus = this.dataset.status;
+        if (newStatus && APPLICATION_ID) {
+            fetch('/accounts/api/applications/' + APPLICATION_ID + '/status/', {
+                method: 'POST', credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                body: JSON.stringify({status: newStatus})
+            }).catch(function(){});
+        }
+    });
+});
+
+/* ── Poll for new messages every 3s ──────────────── */
+function poll() {
+    fetch(POLL_URL + '?since=' + lastId(), { credentials: 'same-origin' })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (d.ok) d.messages.forEach(appendMsg);
+        })
+        .catch(function(){});
+}
+setInterval(poll, 3000);
+</script>
+{% include 'includes/site_footer.html' %}
+</body>
+</html>

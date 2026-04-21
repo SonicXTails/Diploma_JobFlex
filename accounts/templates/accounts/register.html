@@ -1,0 +1,762 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Регистрация</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function(){
+            try{
+                var saved = localStorage.getItem('site_theme');
+                if(saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches))
+                    document.documentElement.classList.add('theme-dark');
+            }catch(e){}
+        })();
+    </script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/plugins/magic/magic.css' %}">
+    
+    <link rel="stylesheet" href="{% static 'accounts/css/register.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+    <header class="site-header anim-hidden">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+                <span class="logo-text">JobFlex</span>
+            </a>
+            <div class="header-actions">
+                <a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+                <a class="btn-link" href="{% url 'accounts:manager_register' %}">Я менеджер</a>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container container--wide">
+        <section class="auth">
+            <form id="register-form" class="auth-form auth-form--wide anim-hidden" onsubmit="return false;">
+                <h2>Создать аккаунт соискателя</h2>
+
+                <div class="fields-grid">
+                    <div class="field"><label>Фамилия *</label><input name="last_name" type="text" required placeholder="Иванов"></div>
+                    <div class="field"><label>Имя *</label><input name="first_name" type="text" required placeholder="Иван"></div>
+                    <div class="field"><label>Отчество</label><input name="patronymic" type="text" placeholder="Иванович"></div>
+                    <div class="field"><label>Логин *</label><input name="username" type="text" required placeholder="login123"></div>
+                    <div class="field"><label>Почта *</label><input name="email" type="email" required placeholder="ivan@example.com"></div>
+                    <div class="field"><label>Телеграм *</label><input name="telegram" type="text" required placeholder="@nickname"></div>
+                    <div class="field"><label>Телефон *</label><input name="phone" id="reg-phone" type="tel" required placeholder="+7 (___) ___-__-__"></div>
+
+                    <!-- Gender toggle -->
+                    <div class="field">
+                        <label>Пол *</label>
+                        <div class="gender-toggle">
+                            <label class="gender-option">
+                                <input type="radio" name="gender" value="M">
+                                <span>Мужской</span>
+                            </label>
+                            <label class="gender-option">
+                                <input type="radio" name="gender" value="F">
+                                <span>Женский</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="field"><label>Город *</label><input name="city" type="text" required placeholder="Москва"></div>
+
+                    <div class="field">
+                        <label>Дата рождения *</label>
+                        <input name="birth_date" type="date" required
+                               max="{{ today }}"
+                               min="1924-01-01">
+                    </div>
+
+                    <div class="field full">
+                        <label>Гражданство *</label>
+                        <!-- hidden native select for form submission/validation -->
+                        <select name="citizenship" id="citizenship-native" required class="u-hidden">
+                            <option value="" disabled selected></option>
+                            <option value="RU">Россия</option>
+                            <option value="BY">Беларусь</option>
+                            <option value="KZ">Казахстан</option>
+                            <option value="KG">Киргизия</option>
+                            <option value="AM">Армения</option>
+                            <option value="TJ">Таджикистан</option>
+                            <option value="UZ">Узбекистан</option>
+                            <option value="UA">Украина</option>
+                            <option value="MD">Молдова</option>
+                            <option value="AZ">Азербайджан</option>
+                            <option value="TM">Туркменистан</option>
+                        </select>
+                        <!-- custom styled dropdown -->
+                        <div class="cs-wrap" id="citizenship-wrap">
+                            <div class="cs-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="cs-value cs-placeholder">Выберите гражданство</span>
+                                <svg class="cs-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                            </div>
+                            <ul class="cs-panel" role="listbox">
+                                <li data-value="RU">Россия</li>
+                                <li data-value="BY">Беларусь</li>
+                                <li data-value="KZ">Казахстан</li>
+                                <li data-value="KG">Киргизия</li>
+                                <li data-value="AM">Армения</li>
+                                <li data-value="TJ">Таджикистан</li>
+                                <li data-value="UZ">Узбекистан</li>
+                                <li data-value="UA">Украина</li>
+                                <li data-value="MD">Молдова</li>
+                                <li data-value="AZ">Азербайджан</li>
+                                <li data-value="TM">Туркменистан</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="field"><label>Пароль *</label><input name="password" type="password" required placeholder="Минимум 8 символов"></div>
+                    <div class="field"><label>Повторите пароль *</label><input name="password_confirm" type="password" required placeholder="Повторите пароль"></div>
+
+                    <!-- ══════════════════════════════════════════════
+                         НЕОБЯЗАТЕЛЬНЫЕ РАЗДЕЛЫ
+                         ══════════════════════════════════════════════ -->
+                    <div class="field full">
+                        <p class="reg-sections-divider">Дополнительная информация</p>
+                    </div>
+
+                    <!-- ── Образование ─────────────────────────── -->
+                    <div class="field full reg-section">
+                        <div class="reg-section__header" id="edu-header" role="button" tabindex="0" aria-expanded="false" aria-controls="edu-body">
+                            <input type="checkbox" id="edu-toggle" aria-hidden="true">
+                            <span class="reg-section__header-label">Образование</span>
+                            <span class="reg-section__hint">необязательно</span>
+                        </div>
+                        <div class="reg-section__body" id="edu-body" aria-hidden="true">
+                            <div id="edu-list"></div>
+                            <button type="button" class="btn-add-more" id="edu-add">+ Добавить запись об образовании</button>
+                        </div>
+                    </div>
+
+                    <!-- ── Опыт работы ─────────────────────────── -->
+                    <div class="field full reg-section">
+                        <div class="reg-section__header" id="work-header" role="button" tabindex="0" aria-expanded="false" aria-controls="work-body">
+                            <input type="checkbox" id="work-toggle" aria-hidden="true">
+                            <span class="reg-section__header-label">Опыт работы</span>
+                            <span class="reg-section__hint">необязательно</span>
+                        </div>
+                        <div class="reg-section__body" id="work-body" aria-hidden="true">
+                            <div id="work-list"></div>
+                            <button type="button" class="btn-add-more" id="work-add">+ Добавить место работы</button>
+                        </div>
+                    </div>
+
+                    <!-- ── Навыки ──────────────────────────────── -->
+                    <div class="field full reg-section">
+                        <div class="reg-section__header" id="skills-header" role="button" tabindex="0" aria-expanded="false" aria-controls="skills-body">
+                            <input type="checkbox" id="skills-toggle" aria-hidden="true">
+                            <span class="reg-section__header-label">Ключевые навыки</span>
+                            <span class="reg-section__hint">необязательно</span>
+                        </div>
+                        <div class="reg-section__body" id="skills-body" aria-hidden="true">
+                            <div class="skills-tag-input" id="skills-tag-input">
+                                <input class="skill-tag-add-input" id="skill-input" type="text"
+                                       placeholder="Введите навык и нажмите Enter или запятую…" autocomplete="off">
+                            </div>
+                            <div class="skills-suggestions" id="skills-suggestions"></div>
+                        </div>
+                    </div>
+
+                    <!-- ── «Добавлю потом» ─────────────────────── -->
+                    <div class="field full u-flex-wrap-center">
+                        <button type="button" class="btn-skip-sections" id="skip-btn">Заполню потом</button>
+                        <span class="u-text-muted-xs">— пропустить дополнительные разделы</span>
+                    </div>
+
+                    <!-- Terms of service -->
+                    <div class="field full">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="terms_accepted" id="terms-check">
+                            <span>Я ознакомлен(а) и принимаю <a href="{% url 'accounts:terms' %}" target="_blank">пользовательское соглашение</a></span>
+                        </label>
+                    </div>
+
+                    <div class="field full actions">
+                        <button id="submit-btn" class="btn-primary">Зарегистрироваться</button>
+                    </div>
+                </div><!-- /.fields-grid -->
+            </form>
+        </section>
+
+        <!-- Error modal -->
+        <div id="error-modal" class="modal-overlay" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true">
+                <div id="modal-message" class="modal-message">Ошибка</div>
+                <div class="modal-actions">
+                    <button id="modal-close" class="btn-primary">Ок</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="{% static 'vacancies/js/theme.js' %}"></script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+    <script src="{% static 'vacancies/js/custom-select.js' %}"></script>
+    <script>
+    (function(){
+        function applyRuPhoneMask(el) {
+            if (!el) return;
+            el.placeholder = '+7 (___) ___-__-__';
+            function fmt(v) {
+                var d = v.replace(/\D/g, '');
+                if (d.startsWith('8')) d = '7' + d.slice(1);
+                if (d && !d.startsWith('7')) d = '7' + d;
+                d = d.slice(0, 11);
+                var r = '';
+                if (d.length > 0) r = '+7';
+                if (d.length > 1) r += ' (' + d.slice(1, 4);
+                if (d.length >= 4) r += ')';
+                if (d.length > 4) r += ' ' + d.slice(4, 7);
+                if (d.length > 7) r += '-' + d.slice(7, 9);
+                if (d.length > 9) r += '-' + d.slice(9, 11);
+                return r;
+            }
+            el.addEventListener('input', function() { var p=this.selectionStart; this.value=fmt(this.value); try{this.setSelectionRange(p,p);}catch(e){} });
+            el.addEventListener('focus', function() { if (!this.value) this.value = '+7 ('; });
+            el.addEventListener('blur',  function() { if (/^\+7\s?\(?$/.test(this.value.trim())) this.value = ''; });
+            el.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && /^\+7\s?\(?$/.test(this.value.trim())) { this.value=''; e.preventDefault(); }
+            });
+        }
+        applyRuPhoneMask(document.getElementById('reg-phone'));
+    })();
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Header
+        var hdr = document.querySelector('.site-header');
+        hdr.classList.remove('anim-hidden');
+        hdr.classList.add('magictime', 'fadeInDown');
+        hdr.style.animationDuration = '0.5s';
+
+        // Form card
+        var form = document.getElementById('register-form');
+        setTimeout(function() {
+            form.classList.remove('anim-hidden');
+            form.classList.add('magictime', 'puffIn');
+            form.style.animationDuration = '0.55s';
+        }, 150);
+
+        // Fields stagger
+        var fields = document.querySelectorAll('.fields-grid .field');
+        fields.forEach(function(el, i) {
+            el.classList.add('field-enter');
+            setTimeout(function() {
+                el.classList.add('field-visible');
+                el.addEventListener('transitionend', function cleanup() {
+                    el.classList.remove('field-enter', 'field-visible');
+                    el.removeEventListener('transitionend', cleanup);
+                });
+            }, 400 + i * 60);
+        });
+
+        // Custom select init
+        initCustomSelect(
+            document.getElementById('citizenship-wrap'),
+            document.getElementById('citizenship-native')
+        );
+    });
+
+    function initCustomSelect(wrap, nativeSelect) {
+        var trigger = wrap.querySelector('.cs-trigger');
+        var panel   = wrap.querySelector('.cs-panel');
+        var valueEl = wrap.querySelector('.cs-value');
+        var items   = panel.querySelectorAll('li');
+
+        function open() {
+            trigger.classList.add('cs-open');
+            panel.classList.add('cs-open');
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+        function close() {
+            trigger.classList.remove('cs-open');
+            panel.classList.remove('cs-open');
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+        function select(item) {
+            items.forEach(function(el) { el.classList.remove('cs-selected'); });
+            item.classList.add('cs-selected');
+            valueEl.textContent = item.textContent;
+            valueEl.classList.remove('cs-placeholder');
+            nativeSelect.value = item.getAttribute('data-value');
+            close();
+        }
+
+        trigger.addEventListener('click', function() {
+            trigger.classList.contains('cs-open') ? close() : open();
+        });
+        trigger.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.classList.contains('cs-open') ? close() : open(); }
+            if (e.key === 'Escape') close();
+        });
+        items.forEach(function(item) {
+            item.addEventListener('click', function() { select(item); });
+        });
+        document.addEventListener('click', function(e) {
+            if (!wrap.contains(e.target)) close();
+        });
+    }
+    </script>
+    <script>
+    function getCookie(name) {
+        var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : null;
+    }
+
+    function showError(text) {
+        var modal = document.getElementById('error-modal');
+        document.getElementById('modal-message').textContent = text;
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeError() {
+        var modal = document.getElementById('error-modal');
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('modal-close').addEventListener('click', closeError);
+    document.getElementById('error-modal').addEventListener('click', function(e){ if (e.target === this) closeError(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeError(); });
+
+    /* ================================================================
+       OPTIONAL SECTIONS — Education / Work / Skills
+       ================================================================ */
+
+    // ── Collapsible section toggle ───────────────────────────────────
+    function setupSectionToggle(headerId, toggleId, bodyId) {
+        var header = document.getElementById(headerId);
+        var toggle = document.getElementById(toggleId);
+        var body   = document.getElementById(bodyId);
+        function sync() {
+            var open = toggle.checked;
+            body.classList.toggle('is-open', open);
+            body.setAttribute('aria-hidden', String(!open));
+            header.setAttribute('aria-expanded', String(open));
+        }
+        header.addEventListener('click', function(e) {
+            if (e.target === toggle) return; // checkbox change fires separately
+            toggle.checked = !toggle.checked;
+            sync();
+        });
+        toggle.addEventListener('change', sync);
+        header.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle.checked = !toggle.checked; sync(); }
+        });
+    }
+    setupSectionToggle('edu-header',    'edu-toggle',    'edu-body');
+    setupSectionToggle('work-header',   'work-toggle',   'work-body');
+    setupSectionToggle('skills-header', 'skills-toggle', 'skills-body');
+
+    // ── Education blocks ─────────────────────────────────────────────
+    var EDU_LEVELS = [
+        {value: '',                  label: '— Выберите уровень —'},
+        {value: 'secondary',         label: 'Среднее'},
+        {value: 'vocational',        label: 'Среднее специальное / профессиональное'},
+        {value: 'incomplete_higher', label: 'Неполное высшее'},
+        {value: 'higher',            label: 'Высшее'},
+        {value: 'bachelor',          label: 'Бакалавр'},
+        {value: 'master',            label: 'Магистр'},
+        {value: 'candidate',         label: 'Кандидат наук'},
+        {value: 'doctor',            label: 'Доктор наук'},
+    ];
+
+    function buildEduBlock() {
+        var block = document.createElement('div');
+        block.className = 'edu-block';
+        var levelOpts = EDU_LEVELS.map(function(l) {
+            return '<option value="' + l.value + '">' + l.label + '</option>';
+        }).join('');
+        block.innerHTML =
+            '<button type="button" class="btn-remove-block" title="Удалить">×</button>' +
+            '<div class="inner-grid">' +
+                '<div class="field full">' +
+                    '<label>Уровень образования</label>' +
+                    '<select class="edu-level" name="edu_level[]">' + levelOpts + '</select>' +
+                '</div>' +
+                '<div class="field full">' +
+                    '<label>Учебное заведение *</label>' +
+                    '<input type="text" class="edu-institution" placeholder="Название вуза / колледжа">' +
+                '</div>' +
+                '<div class="field">' +
+                    '<label>Факультет</label>' +
+                    '<input type="text" class="edu-faculty" placeholder="Факультет">' +
+                '</div>' +
+                '<div class="field">' +
+                    '<label>Специальность / направление</label>' +
+                    '<input type="text" class="edu-spec" placeholder="Специальность">' +
+                '</div>' +
+                '<div class="field">' +
+                    '<label>Год окончания</label>' +
+                    '<input type="number" class="edu-year" min="1950" max="2035" placeholder="Например, 2022">' +
+                '</div>' +
+            '</div>';
+        block.querySelector('.btn-remove-block').addEventListener('click', function() {
+            block.remove();
+            refreshEduRemoveBtns();
+        });
+        return block;
+    }
+
+    function refreshEduRemoveBtns() {
+        var blocks = document.querySelectorAll('#edu-list .edu-block');
+        blocks.forEach(function(b) {
+            b.querySelector('.btn-remove-block').style.display = blocks.length > 1 ? '' : 'none';
+        });
+    }
+
+    function addEduBlock() {
+        var list = document.getElementById('edu-list');
+        list.appendChild(buildEduBlock());
+        refreshEduRemoveBtns();
+        if (typeof initCustomSelects === 'function') initCustomSelects();
+    }
+
+    document.getElementById('edu-add').addEventListener('click', addEduBlock);
+    // Add first block when section opens
+    document.getElementById('edu-toggle').addEventListener('change', function() {
+        if (this.checked && document.querySelectorAll('#edu-list .edu-block').length === 0) addEduBlock();
+    });
+
+    // ── Work experience blocks ───────────────────────────────────────
+    var MONTHS = [
+        '', 'Январь','Февраль','Март','Апрель','Май','Июнь',
+        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
+    ];
+    function monthOpts() {
+        return '<option value="">— Месяц —</option>' +
+            MONTHS.slice(1).map(function(m, i) {
+                return '<option value="' + (i+1) + '">' + m + '</option>';
+            }).join('');
+    }
+
+    function buildWorkBlock() {
+        var block = document.createElement('div');
+        block.className = 'work-block';
+        block.innerHTML =
+            '<button type="button" class="btn-remove-block" title="Удалить">×</button>' +
+            '<div class="inner-grid">' +
+                '<div class="field">' +
+                    '<label>Компания *</label>' +
+                    '<input type="text" class="work-company" placeholder="Название компании">' +
+                '</div>' +
+                '<div class="field">' +
+                    '<label>Должность *</label>' +
+                    '<input type="text" class="work-position" placeholder="Ваша должность">' +
+                '</div>' +
+                '<div class="field">' +
+                    '<label>Начало</label>' +
+                    '<div style="display:flex;gap:8px">' +
+                        '<select class="work-start-month" style="flex:1">' + monthOpts() + '</select>' +
+                        '<input type="number" class="work-start-year" min="1950" max="2030" placeholder="Год" style="width:90px">' +
+                    '</div>' +
+                '</div>' +
+                '<div class="field work-end-field">' +
+                    '<label>Конец</label>' +
+                    '<div style="display:flex;gap:8px">' +
+                        '<select class="work-end-month" style="flex:1">' + monthOpts() + '</select>' +
+                        '<input type="number" class="work-end-year" min="1950" max="2030" placeholder="Год" style="width:90px">' +
+                    '</div>' +
+                '</div>' +
+                '<div class="field full">' +
+                    '<label class="work-current-row">' +
+                        '<input type="checkbox" class="work-is-current"> Работаю здесь сейчас' +
+                    '</label>' +
+                '</div>' +
+                '<div class="field full">' +
+                    '<label>Обязанности и достижения</label>' +
+                    '<textarea class="work-resp" rows="3" placeholder="Кратко опишите задачи и достижения…" style="resize:vertical;width:100%"></textarea>' +
+                '</div>' +
+            '</div>';
+
+        var isCurrentCb = block.querySelector('.work-is-current');
+        var endField    = block.querySelector('.work-end-field');
+        isCurrentCb.addEventListener('change', function() {
+            var disable = this.checked;
+            endField.querySelectorAll('select, input').forEach(function(el) {
+                el.disabled = disable;
+                el.style.opacity = disable ? '.4' : '';
+            });
+        });
+
+        block.querySelector('.btn-remove-block').addEventListener('click', function() {
+            block.remove();
+            refreshWorkRemoveBtns();
+        });
+        return block;
+    }
+
+    function refreshWorkRemoveBtns() {
+        var blocks = document.querySelectorAll('#work-list .work-block');
+        blocks.forEach(function(b) {
+            b.querySelector('.btn-remove-block').style.display = blocks.length > 1 ? '' : 'none';
+        });
+    }
+
+    function addWorkBlock() {
+        var list = document.getElementById('work-list');
+        list.appendChild(buildWorkBlock());
+        refreshWorkRemoveBtns();
+        if (typeof initCustomSelects === 'function') initCustomSelects();
+    }
+
+    document.getElementById('work-add').addEventListener('click', addWorkBlock);
+    document.getElementById('work-toggle').addEventListener('change', function() {
+        if (this.checked && document.querySelectorAll('#work-list .work-block').length === 0) addWorkBlock();
+    });
+
+    // ── Skills tag input ─────────────────────────────────────────────
+    var SUGGESTED_SKILLS = [
+        'Microsoft Office','Excel','Word','PowerPoint','1С','Python','SQL','JavaScript',
+        'HTML/CSS','Git','Photoshop','AutoCAD','Figma','Jira','Trello','Agile/Scrum',
+        'Управление проектами','Работа с клиентами','Деловая переписка','Английский язык'
+    ];
+    var addedSkills = [];
+
+    var tagInput  = document.getElementById('skills-tag-input');
+    var skillInp  = document.getElementById('skill-input');
+    var suggsContainer = document.getElementById('skills-suggestions');
+
+    function renderSuggestions() {
+        suggsContainer.innerHTML = '';
+        SUGGESTED_SKILLS.forEach(function(s) {
+            var chip = document.createElement('span');
+            chip.className = 'skill-suggestion' + (addedSkills.indexOf(s) !== -1 ? ' is-added' : '');
+            chip.textContent = s;
+            chip.addEventListener('click', function() { addSkill(s); });
+            suggsContainer.appendChild(chip);
+        });
+    }
+
+    function addSkill(name) {
+        name = name.trim();
+        if (!name || addedSkills.indexOf(name) !== -1) return;
+        addedSkills.push(name);
+
+        var tag = document.createElement('span');
+        tag.className = 'skill-tag';
+        tag.textContent = name;
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'skill-tag__remove';
+        rm.title = 'Удалить';
+        rm.textContent = '×';
+        rm.addEventListener('click', function() {
+            var idx = addedSkills.indexOf(name);
+            if (idx !== -1) addedSkills.splice(idx, 1);
+            tag.remove();
+            renderSuggestions();
+        });
+        tag.appendChild(rm);
+        tagInput.insertBefore(tag, skillInp);
+        skillInp.value = '';
+        renderSuggestions();
+    }
+
+    skillInp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            addSkill(this.value);
+        }
+        if (e.key === 'Backspace' && !this.value && addedSkills.length) {
+            var last = addedSkills[addedSkills.length - 1];
+            var lastTag = tagInput.querySelectorAll('.skill-tag');
+            if (lastTag.length) lastTag[lastTag.length - 1].remove();
+            addedSkills.pop();
+            renderSuggestions();
+        }
+    });
+    skillInp.addEventListener('blur', function() {
+        if (this.value.trim()) addSkill(this.value);
+    });
+    tagInput.addEventListener('click', function() { skillInp.focus(); });
+
+    document.getElementById('skills-toggle').addEventListener('change', function() {
+        if (this.checked && !suggsContainer.children.length) renderSuggestions();
+    });
+
+    // ── "Заполню потом" skip button ──────────────────────────────────
+    document.getElementById('skip-btn').addEventListener('click', function() {
+        ['edu-toggle','work-toggle','skills-toggle'].forEach(function(id) {
+            var cb = document.getElementById(id);
+            if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change')); }
+        });
+        var termsEl = document.getElementById('terms-check');
+        termsEl.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+    /* ── End optional sections ──────────────────────────────────── */
+
+    document.getElementById('submit-btn').addEventListener('click', function(){
+        var f = document.getElementById('register-form');
+
+        function normalizeName(s){
+            if (!s) return '';
+            s = s.trim();
+            return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        }
+
+        var last     = normalizeName(f.last_name.value);
+        var first    = normalizeName(f.first_name.value);
+        var patron   = f.patronymic.value.trim() ? normalizeName(f.patronymic.value) : '';
+        var username = f.username.value.trim();
+        var email    = f.email.value.trim();
+        var telegram = f.telegram.value.trim();
+        var phone    = f.phone.value.trim();
+        var genderEl = f.querySelector('input[name="gender"]:checked');
+        var gender   = genderEl ? genderEl.value : '';
+        var city     = f.city.value.trim();
+        var birthDate = f.birth_date.value;
+        var citizenship = f.citizenship.value;
+        var password = f.password.value;
+        var passConfirm = f.password_confirm.value;
+        var termsAccepted = document.getElementById('terms-check').checked;
+
+        // ── ФИО ───────────────────────────────────────
+        if (last.length < 2 || last.length > 50)  { showError('Фамилия должна быть от 2 до 50 символов.'); return; }
+        if (first.length < 2 || first.length > 50) { showError('Имя должно быть от 2 до 50 символов.'); return; }
+        if (patron && (patron.length < 2 || patron.length > 50)) { showError('Отчество должно быть от 2 до 50 символов или оставьте пустым.'); return; }
+
+        // ── Логин ────────────────────────────────────
+        if (!username) { showError('Укажите логин.'); return; }
+        if (username.length < 3 || username.length > 30) { showError('Логин должен быть от 3 до 30 символов.'); return; }
+        if (!/^[A-Za-z0-9_.\-]+$/.test(username)) { showError('Логин может содержать только латинские буквы, цифры и символы ._-'); return; }
+
+        // ── Email / Telegram ─────────────────────────
+        if (!email) { showError('Укажите почту.'); return; }
+        if (!telegram) { showError('Укажите Телеграм.'); return; }
+        if (telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
+
+        // ── Телефон ──────────────────────────────────
+        if (!phone) { showError('Укажите номер телефона.'); return; }
+        var phoneDigits = phone.replace(/\D/g, '');
+        if (phoneDigits.startsWith('8')) phoneDigits = '7' + phoneDigits.slice(1);
+        if (!/^7[0-9]{10}$/.test(phoneDigits)) { showError('Введите номер в формате +7 (XXX) XXX-XX-XX.'); return; }
+
+        // ── Пол ──────────────────────────────────────
+        if (!gender) { showError('Выберите пол.'); return; }
+
+        // ── Город ────────────────────────────────────
+        if (!city) { showError('Укажите город проживания.'); return; }
+        if (city.length < 2 || city.length > 100) { showError('Название города должно быть от 2 до 100 символов.'); return; }
+
+        // ── Дата рождения ────────────────────────────
+        if (!birthDate) { showError('Укажите дату рождения.'); return; }
+        var today = new Date();
+        var bd = new Date(birthDate);
+        if (isNaN(bd.getTime())) { showError('Введите корректную дату рождения.'); return; }
+        var age = today.getFullYear() - bd.getFullYear()
+                  - ((today.getMonth() < bd.getMonth() || (today.getMonth() === bd.getMonth() && today.getDate() < bd.getDate())) ? 1 : 0);
+        if (age < 14) { showError('Вам должно быть не менее 14 лет.'); return; }
+        if (age > 100) { showError('Введите корректную дату рождения.'); return; }
+
+        // ── Гражданство ──────────────────────────────
+        if (!citizenship) { showError('Выберите гражданство.'); return; }
+
+        // ── Пароль ───────────────────────────────────
+        if (password !== passConfirm) { showError('Пароли не совпадают.'); return; }
+        var pwErrors = [];
+        if (password.length < 8) pwErrors.push('минимум 8 символов');
+        if (!/[A-ZА-ЯЁ]/.test(password)) pwErrors.push('хотя бы одна заглавная буква');
+        if (!/[a-zа-яё]/.test(password)) pwErrors.push('хотя бы одна строчная буква');
+        if (!/[0-9]/.test(password)) pwErrors.push('хотя бы одна цифра');
+        if (!/[!@#\$%\^&\*()_+\-=[\]{};':"\\|,.<>\/?`~]/.test(password)) pwErrors.push('хотя бы один спецсимвол');
+        if (pwErrors.length) { showError('Пароль должен содержать: ' + pwErrors.join(', ') + '.'); return; }
+
+        // ── Соглашение ───────────────────────────────
+        if (!termsAccepted) { showError('Необходимо принять пользовательское соглашение.'); return; }
+
+        // ── Отправка ─────────────────────────────────
+        // Collect education entries
+        var educationData = [];
+        document.querySelectorAll('#edu-list .edu-block').forEach(function(b) {
+            var institution = b.querySelector('.edu-institution').value.trim();
+            if (!institution) return;
+            var yr = parseInt(b.querySelector('.edu-year').value, 10);
+            educationData.push({
+                level:           b.querySelector('.edu-level').value,
+                institution:     institution,
+                faculty:         b.querySelector('.edu-faculty').value.trim(),
+                specialization:  b.querySelector('.edu-spec').value.trim(),
+                graduation_year: isNaN(yr) ? null : yr,
+            });
+        });
+
+        // Collect work experience entries
+        var workData = [];
+        document.querySelectorAll('#work-list .work-block').forEach(function(b) {
+            var company  = b.querySelector('.work-company').value.trim();
+            var position = b.querySelector('.work-position').value.trim();
+            if (!company || !position) return;
+            var smv = parseInt(b.querySelector('.work-start-month').value, 10);
+            var syv = parseInt(b.querySelector('.work-start-year').value, 10);
+            var emv = parseInt(b.querySelector('.work-end-month').value, 10);
+            var eyv = parseInt(b.querySelector('.work-end-year').value, 10);
+            var isCur = b.querySelector('.work-is-current').checked;
+            workData.push({
+                company:         company,
+                position:        position,
+                start_month:     isNaN(smv) ? null : smv,
+                start_year:      isNaN(syv) ? null : syv,
+                end_month:       (isCur || isNaN(emv)) ? null : emv,
+                end_year:        (isCur || isNaN(eyv)) ? null : eyv,
+                is_current:      isCur,
+                responsibilities: b.querySelector('.work-resp').value.trim(),
+            });
+        });
+
+        fetch('{% url "accounts:api_register" %}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({
+                last_name: last, first_name: first, patronymic: patron,
+                username: username, email: email, telegram: telegram,
+                phone: phone, gender: gender, city: city,
+                birth_date: birthDate, citizenship: citizenship,
+                password: password,
+                education:       educationData,
+                work_experience: workData,
+                skills:          addedSkills.slice(),
+            })
+        }).then(function(r){
+            return r.json().then(function(d){ return {status: r.status, body: d}; });
+        }).then(function(res){
+            if (res.status === 200 && res.body.ok) {
+                window.location.href = '/accounts/profile/';
+            } else {
+                var code = res.body && res.body.error ? res.body.error : null;
+                var msgs = {
+                    'missing_fields':        'Заполните, пожалуйста, все обязательные поля.',
+                    'email_exists':          'Пользователь с такой почтой уже зарегистрирован.',
+                    'username_exists':       'Этот логин уже занят.',
+                    'telegram_exists':       'Данный Телеграм уже зарегистрирован.',
+                    'invalid_telegram_format': 'Телеграм должен начинаться с @.',
+                    'invalid_username':      'Логин должен быть от 3 до 30 символов.',
+                    'invalid_username_format': 'Логин может содержать только латинские буквы, цифры и символы ._-',
+                    'invalid_phone':         'Введите корректный номер телефона.',
+                    'invalid_gender':        'Выберите корректный пол.',
+                    'invalid_city':          'Введите корректное название города.',
+                    'invalid_birth_date':    'Введите корректную дату рождения.',
+                    'too_young':             'Вам должно быть не менее 14 лет.',
+                    'invalid_citizenship':   'Выберите гражданство из списка.',
+                    'invalid_json':          'Неверные данные запроса.',
+                };
+                showError(msgs[code] || 'Ошибка сервера. Попробуйте позже.');
+            }
+        }).catch(function(){ showError('Сетевая ошибка. Проверьте соединение.'); });
+    });
+    </script>
+    {% include 'includes/site_footer.html' %}
+</body>
+</html>

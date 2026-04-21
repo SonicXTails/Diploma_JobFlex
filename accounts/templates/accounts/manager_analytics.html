@@ -1,0 +1,1431 @@
+<!doctype html>
+{% load static %}
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Метрики менеджера</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/calendar.css' %}">
+    <link rel="stylesheet" href="{% static 'accounts/css/manager-analytics.css' %}">
+</head>
+<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+<header class="site-header">
+    <div class="container header-inner">
+        <a href="/" class="logo">
+            <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+            <span class="logo-text">JobFlex</span>
+        </a>
+        <div class="header-actions">
+            <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+        </div>
+    </div>
+</header>
+
+<main class="an-page">
+    <h2 class="an-title">📊 Метрики менеджера</h2>
+
+    <!-- Tab bar -->
+    <div class="an-tabs">
+        <button class="an-tab-btn an-tab-btn--active" data-tab="analytics">📊 Аналитика</button>
+        <button class="an-tab-btn" data-tab="calendar">📅 Календарь</button>
+    </div>
+
+    <!-- ─────────────── TAB: ANALYTICS ─────────────── -->
+    <div id="an-tab-analytics">
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-val">{{ total_vacancies }}</div>
+            <div class="summary-lbl">Вакансий всего</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val">{{ total_active }}</div>
+            <div class="summary-lbl">Активных</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val">{{ total_views }}</div>
+            <div class="summary-lbl">Просмотров</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val">{{ total_apps }}</div>
+            <div class="summary-lbl">Откликов</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val" style="color:#5cb85c">{{ total_accepted }}</div>
+            <div class="summary-lbl">Приглашений</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val" style="color:#d9534f">{{ total_rejected }}</div>
+            <div class="summary-lbl">Отказов</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-val" style="color:#f0ad4e">{{ total_pending }}</div>
+            <div class="summary-lbl">Ожидают</div>
+        </div>
+    </div>
+
+    <!-- Per-vacancy table -->
+    <h3 class="section-title">Эффективность вакансий</h3>
+    {% if vacancies %}
+    <div style="overflow-x:auto">
+    <table class="an-table">
+        <thead>
+            <tr>
+                <th>Вакансия</th>
+                <th>Просмотры</th>
+                <th>Отклики</th>
+                <th>Приглашения</th>
+                <th>Отказы</th>
+                <th>Конверсия</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for vac in vacancies %}
+        <tr>
+            <td>
+                <a class="vac-link" href="{% url 'vacancy-detail' vac.external_id %}">{{ vac.title|truncatechars:40 }}</a>
+                {% if not vac.is_active %}<span class="badge-arch">Архив</span>{% endif %}
+            </td>
+            <td>{{ vac.total_views }}</td>
+            <td>{{ vac.total_apps }}</td>
+            <td style="color:#155724;font-weight:600">{{ vac.accepted }}</td>
+            <td style="color:#721c24">{{ vac.rejected }}</td>
+            <td>
+                {% if vac.total_apps %}
+                    {% widthratio vac.accepted vac.total_apps 100 as pct %}
+                    <span class="conv-bar" style="width:{{ pct }}px"></span>{{ pct }}%
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                {% if vac.total_apps %}
+                <a class="btn" href="{% url 'accounts:vacancy_applications' vac.pk %}"
+                   style="font-size:11px;text-decoration:none;padding:4px 10px">👥 Отклики</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="empty-msg">У вас ещё нет вакансий.</p>
+    {% endif %}
+
+    <!-- Recent applications (30 days) -->
+    <h3 class="section-title">Свежие отклики (последние 30 дней)</h3>
+    {% if recent_apps %}
+        {% for app in recent_apps %}
+        <div class="recent-app-row">
+            <div>
+                <div class="recent-app-name">
+                    {{ app.applicant.get_full_name|default:app.applicant.username }}
+                </div>
+                <div class="recent-app-meta">
+                    {{ app.vacancy.title|truncatechars:45 }} &nbsp;·&nbsp; {{ app.created_at|date:"d.m.Y" }}
+                </div>
+            </div>
+            <span class="status-pill status-{{ app.status }}">
+                {% for val, lbl in status_choices %}{% if val == app.status %}{{ lbl }}{% endif %}{% endfor %}
+            </span>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty-msg">Откликов за последние 30 дней нет.</p>
+    {% endif %}
+
+    </div><!-- /#an-tab-analytics -->
+
+    <!-- ─────────────── TAB: CALENDAR ─────────────── -->
+    <div id="an-tab-calendar" style="display:none">
+        <div class="cal-layout">
+            <!-- Left: month grid -->
+            <div class="cal-main">
+                <div class="cal-header">
+                    <button class="cal-nav" id="cal-prev" aria-label="Предыдущий месяц">&#8249;</button>
+                    <span class="cal-month-label" id="cal-month-label"></span>
+                    <button class="cal-nav" id="cal-next" aria-label="Следующий месяц">&#8250;</button>
+                    <button class="cal-today-btn" id="cal-today">Сегодня</button>
+                    <button class="cal-fs-open-btn" id="cal-fs-open" title="Развернуть календарь" style="border:1.5px solid var(--accent);color:var(--accent)">⛶</button>
+                </div>
+                <div class="cal-grid cal-weekdays">
+                    <span>Пн</span><span>Вт</span><span>Ср</span>
+                    <span>Чт</span><span>Пт</span>
+                    <span class="cal-weekend">Сб</span>
+                    <span class="cal-weekend">Вс</span>
+                </div>
+                <div class="cal-grid cal-days" id="cal-days"></div>
+            </div>
+            <!-- Right: day schedule -->
+            <div class="cal-detail" id="cal-detail">
+                <div class="cal-detail__header">
+                    <span class="cal-detail__date" id="cal-detail-date">Выберите день</span>
+                </div>
+                <div class="cal-detail__body" id="cal-detail-body">
+                    <p class="cal-detail__placeholder">Нажмите на любой день, чтобы увидеть расписание.</p>
+                </div>
+                <div class="cal-note-form" id="cal-note-form" style="display:none">
+                    <button class="cal-note-add-btn" id="cal-note-add">➕ Добавить заметку</button>
+                </div>
+            </div>
+        </div>
+        <!-- Почасовая хронология дня -->
+        <div class="cal-day-tl" id="cal-day-tl" style="display:none">
+            <div class="cal-day-tl__title" id="cal-day-tl-title"></div>
+            <div class="cal-day-tl__body" id="cal-day-tl-body"></div>
+        </div>
+    </div><!-- /#an-tab-calendar -->
+
+    <!-- ══════════════════════════════════════════════════════════════
+         FULLSCREEN CALENDAR MODAL
+    ══════════════════════════════════════════════════════════════ -->
+    <div id="cal-fs-overlay" class="cal-fs-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Расширенный календарь">
+      <div class="cal-fs-panel">
+        <div class="cal-fs-toolbar">
+          <div class="cal-fs-nav-wrap">
+            <button class="cal-fs-nav" id="cal-fs-prev" title="Назад">&#8249;</button>
+            <span class="cal-fs-month-label" id="cal-fs-month-label"></span>
+            <button class="cal-fs-nav" id="cal-fs-next" title="Вперёд">&#8250;</button>
+            <button class="cal-fs-today-btn" id="cal-fs-today">Сегодня</button>
+          </div>
+          <div class="cal-fs-view-toggle">
+            <button class="cal-fs-view-btn active" id="cal-fs-btn-month">Месяц</button>
+            <button class="cal-fs-view-btn" id="cal-fs-btn-week">Неделя</button>
+          </div>
+          <input class="cal-fs-search" id="cal-fs-search" type="search" placeholder="&#128269; Поиск по заметкам&hellip;" autocomplete="off">
+          <button class="cal-fs-export-btn" id="cal-fs-search-next" title="Перейти к следующей найденной заметке" disabled>Дальше</button>
+          <button class="cal-fs-export-btn" id="cal-fs-export-ics" title="Скачать .ics для Google/Outlook">&#128197; Скачать .ics</button>
+          <button class="cal-fs-close-btn" id="cal-fs-close" title="Закрыть (Esc)">&#x2715;</button>
+        </div>
+        <div class="cal-fs-body">
+          <div id="cal-fs-month-view" class="cal-fs-month-view">
+            <div class="cal-fs-main">
+              <div class="cal-fs-weekdays">
+                <span class="cal-fs-weekday-label">Пн</span>
+                <span class="cal-fs-weekday-label">Вт</span>
+                <span class="cal-fs-weekday-label">Ср</span>
+                <span class="cal-fs-weekday-label">Чт</span>
+                <span class="cal-fs-weekday-label">Пт</span>
+                <span class="cal-fs-weekday-label weekend">Сб</span>
+                <span class="cal-fs-weekday-label weekend">Вс</span>
+              </div>
+              <div class="cal-fs-days-grid" id="cal-fs-days"></div>
+            </div>
+            <div class="cal-fs-detail">
+              <div class="cal-fs-detail-header"><span id="cal-fs-detail-date">Выберите день</span></div>
+              <div class="cal-fs-detail-body" id="cal-fs-detail-body">
+                <p class="cal-detail__placeholder">Нажмите на любой день, чтобы увидеть расписание.</p>
+              </div>
+              <div class="cal-note-form" id="cal-fs-note-form" style="display:none">
+                <button class="cal-note-add-btn" id="cal-fs-note-add">➕ Добавить заметку</button>
+              </div>
+            </div>
+          </div>
+          <div id="cal-fs-week-view" class="cal-fs-week-view" style="display:none">
+            <div class="cal-wk-outer">
+              <div class="cal-wk-head-row" id="cal-fs-wk-header"></div>
+              <div class="cal-wk-scroll" id="cal-fs-wk-scroll">
+                <div class="cal-wk-grid" id="cal-fs-wk-body"></div>
+              </div>
+            </div>
+            <div class="cal-fs-detail cal-wk-side-detail" id="cal-fs-wk-side">
+              <div class="cal-fs-detail-header"><span id="cal-fs-wk-side-date">Выберите день</span></div>
+              <div class="cal-fs-detail-body" id="cal-fs-wk-side-body">
+                <p class="cal-detail__placeholder">Нажмите на колонку дня, чтобы увидеть расписание.</p>
+              </div>
+              <div class="cal-note-form" id="cal-fs-wk-note-form" style="display:none">
+                <button class="cal-note-add-btn" id="cal-fs-wk-note-add">➕ Добавить заметку</button>
+              </div>
+            </div>
+          </div>
+        </div><!-- /.cal-fs-body -->
+      </div><!-- /.cal-fs-panel -->
+    </div><!-- /#cal-fs-overlay -->
+
+    <!-- NOTE MODAL -->
+    <div id="note-modal-overlay" class="note-modal-overlay" style="display:none" role="dialog" aria-modal="true">
+      <div class="note-modal" id="note-modal">
+        <p class="note-modal__title" id="note-modal-heading">Новая заметка</p>
+        <button class="note-modal__close" id="note-modal-close" aria-label="Закрыть">&#x2715;</button>
+        <div class="note-modal__field">
+          <label for="note-modal-title">Название</label>
+          <input id="note-modal-title" class="note-modal__input" type="text" placeholder="Название заметки…" maxlength="200" autocomplete="off">
+        </div>
+        <div class="note-modal__field">
+          <label for="note-modal-body">Содержимое</label>
+          <textarea id="note-modal-body" class="note-modal__input note-modal__textarea" placeholder="Подробное описание…"></textarea>
+        </div>
+        <div class="note-modal__field">
+          <label>Цвет</label>
+          <div class="note-modal__color-row" id="note-modal-color-row">
+            <span class="note-modal__color-swatch active" data-color="#c2a35a" style="background:#c2a35a" title="Золотой"></span>
+            <span class="note-modal__color-swatch" data-color="#e05252" style="background:#e05252" title="Красный"></span>
+            <span class="note-modal__color-swatch" data-color="#70b87e" style="background:#70b87e" title="Зелёный"></span>
+            <span class="note-modal__color-swatch" data-color="#6c9bd2" style="background:#6c9bd2" title="Синий"></span>
+            <span class="note-modal__color-swatch" data-color="#9b59b6" style="background:#9b59b6" title="Фиолетовый"></span>
+            <span class="note-modal__color-swatch" data-color="#e8a838" style="background:#e8a838" title="Оранжевый"></span>
+            <span class="note-modal__color-swatch" data-color="#4bbfa6" style="background:#4bbfa6" title="Морская волна"></span>
+            <span class="note-modal__color-swatch" data-color="#ec6fae" style="background:#ec6fae" title="Розовый"></span>
+            <div class="note-modal__color-custom-wrap" title="Свой цвет">
+              <input type="color" id="note-modal-color-custom" value="#c2a35a">
+              <div class="swatch-icon">🎨</div>
+            </div>
+          </div>
+        </div>
+        <div class="note-modal__field">
+          <div class="note-modal__time-row">
+            <label for="note-modal-time">Время</label>
+            <input id="note-modal-time" class="note-modal__input" type="time" style="width:130px;flex:none">
+            <span style="font-size:12px;color:var(--text-secondary)">необязательно</span>
+          </div>
+        </div>
+        <div class="note-modal__footer">
+          <button class="note-modal__btn-cancel" id="note-modal-cancel">Отмена</button>
+          <button class="note-modal__btn-save" id="note-modal-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+</main>
+
+<script src="{% static 'vacancies/js/theme.js' %}"></script>
+<script src="{% static 'vacancies/js/macros.js' %}"></script>
+<script>
+(function(){
+    var dark = document.documentElement.classList.contains('theme-dark');
+    var btn  = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = dark ? '☀️' : '🌙';
+})();
+
+/* ── Tab switching ── */
+(function(){
+    var tabs = document.querySelectorAll('.an-tab-btn');
+    function switchTab(target) {
+        tabs.forEach(function(b){ b.classList.remove('an-tab-btn--active'); });
+        var activeBtn = document.querySelector('.an-tab-btn[data-tab="' + target + '"]');
+        if (activeBtn) activeBtn.classList.add('an-tab-btn--active');
+        document.getElementById('an-tab-analytics').style.display = (target === 'analytics') ? '' : 'none';
+        document.getElementById('an-tab-calendar').style.display   = (target === 'calendar')  ? '' : 'none';
+        if(target === 'calendar' && typeof calRender === 'function') calRender();
+    }
+    tabs.forEach(function(btn){
+        btn.addEventListener('click', function(){
+            switchTab(btn.getAttribute('data-tab'));
+        });
+    });
+    // Support ?tab=calendar from profile page — defer so calRender is defined first
+    var urlTab = new URLSearchParams(window.location.search).get('tab');
+    if (urlTab === 'calendar') setTimeout(function(){ switchTab('calendar'); }, 0);
+})();
+
+/* ════════════════════════════════════════════════════════
+   Manager Calendar
+════════════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    var _year, _month, _today, _selectedKey = null, _monthMarks = {}, _animDir = 0;
+    var _calDragNote = null;
+
+    var MONTH_NAMES = ['Январь','Февраль','Март','Апрель',
+        'Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    var DAY_NAMES   = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+    function _pad(n){ return n < 10 ? '0'+n : ''+n; }
+    function _key(y,m,d){ return y+'-'+_pad(m+1)+'-'+_pad(d); }
+    function _csrf(){ var m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+    function _esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function calRender(){
+        var t = new Date();
+        if(_year === undefined){ _year = t.getFullYear(); _month = t.getMonth(); }
+        _today = _key(t.getFullYear(), t.getMonth(), t.getDate());
+
+        document.getElementById('cal-month-label').textContent =
+            MONTH_NAMES[_month] + ' ' + _year;
+
+        var first    = new Date(_year, _month, 1);
+        var startDow = (first.getDay() + 6) % 7;
+        var daysInM  = new Date(_year, _month+1, 0).getDate();
+        var daysInP  = new Date(_year, _month,   0).getDate();
+
+        var cells = [];
+        for(var i=startDow-1; i>=0; i--) cells.push({d:daysInP-i, cur:false});
+        for(var d=1; d<=daysInM; d++)    cells.push({d:d, cur:true});
+        var rem = cells.length%7;
+        if(rem>0) for(var n=1; n<=7-rem; n++) cells.push({d:n, cur:false});
+
+        var grid = document.getElementById('cal-days');
+        grid.innerHTML = '';
+        cells.forEach(function(c, idx){
+            var key  = c.cur ? _key(_year, _month, c.d) : null;
+            var dow  = idx % 7;
+            var isWE = dow >= 5;
+            var cls  = 'cal-day'
+                + (!c.cur              ? ' cal-day--other-month' : '')
+                + (isWE               ? ' cal-day--weekend'     : '')
+                + (key===_today       ? ' cal-day--today'       : '')
+                + (key===_selectedKey ? ' cal-day--selected'    : '');
+
+            var el = document.createElement('div');
+            el.className = cls;
+            el.setAttribute('role','button');
+
+            var numEl = document.createElement('span');
+            numEl.className = 'cal-day__num';
+            numEl.textContent = c.d;
+            el.appendChild(numEl);
+
+            if(key && _monthMarks[key]){
+                var dots = document.createElement('div');
+                dots.className = 'cal-day__dots';
+                (_monthMarks[key] || []).forEach(function(color){
+                    var dot = document.createElement('span');
+                    dot.className = 'cal-dot';
+                    dot.style.background = color;
+                    dots.appendChild(dot);
+                });
+                el.appendChild(dots);
+            }
+
+            if(c.cur){
+                el.addEventListener('click', function(){ selectDay(key, c.d); });
+                el.addEventListener('dragover', function(e){
+                    if (_calDragNote){ e.preventDefault(); el.classList.add('drop-target'); }
+                });
+                el.addEventListener('dragleave', function(){ el.classList.remove('drop-target'); });
+                el.addEventListener('drop', function(e){
+                    e.preventDefault();
+                    el.classList.remove('drop-target');
+                    if (_calDragNote){
+                        var newDate = el.getAttribute('data-date-key') || key;
+                        if (newDate && newDate !== _calDragNote.fromDate){
+                            moveNoteCompact(_calDragNote.id, newDate, _calDragNote.fromDate, _calDragNote.noteTime);
+                        }
+                        _calDragNote = null;
+                    }
+                });
+                el.setAttribute('data-date-key', key);
+            }
+            grid.appendChild(el);
+        });
+
+        if(_animDir !== 0){
+            var ac = _animDir < 0 ? 'cal-days--in-left' : 'cal-days--in-right';
+            grid.classList.remove('cal-days--in-left','cal-days--in-right');
+            void grid.offsetWidth;
+            grid.classList.add(ac);
+            _animDir = 0;
+        }
+
+        loadMonthMarks();
+    }
+
+    function loadMonthMarks(){
+        var monthKey = _year+'-'+_pad(_month+1);
+        if(_monthMarks['__month'] === monthKey) return;
+        var probe = monthKey+'-01';
+        fetch('/accounts/api/manager/calendar/events/?date='+probe+'&_ts='+Date.now(), {
+            headers:{'X-Requested-With':'XMLHttpRequest'},
+            cache: 'no-store'
+        })
+        .then(function(r){return r.json();})
+        .then(function(d){
+            if(!d.ok) return;
+            var marks = d.month_marks || {};
+            marks['__month'] = monthKey;
+            _monthMarks = marks;
+            calRender();
+        }).catch(function(){});
+    }
+
+    function selectDay(key, dayNum){
+        _selectedKey = key;
+        calRender();
+
+        var parts = key.split('-');
+        var dt    = new Date(+parts[0], +parts[1]-1, +parts[2]);
+        document.getElementById('cal-detail-date').textContent =
+            dayNum + ' ' + MONTH_NAMES[+parts[1]-1] + ' ' + parts[0] +
+            ', ' + DAY_NAMES[dt.getDay()];
+
+        document.getElementById('cal-note-form').style.display = '';
+
+        var body = document.getElementById('cal-detail-body');
+        body.innerHTML = '<p class="cal-loading">Загрузка…</p>';
+
+        fetch('/accounts/api/manager/calendar/events/?date='+key+'&_ts='+Date.now(), {
+            headers:{'X-Requested-With':'XMLHttpRequest'},
+            cache: 'no-store'
+        })
+        .then(function(r){return r.json();})
+        .then(function(d){
+            if(!d.ok){ body.innerHTML='<p class="cal-detail__empty">Ошибка загрузки.</p>'; document.getElementById('cal-day-tl').style.display='none'; return; }
+            renderTimeline(d.events, body, key);
+            renderHourTl(d.events, document.getElementById('cal-detail-date').textContent);
+            if(d.month_marks){
+                var mKey = _year+'-'+_pad(_month+1);
+                Object.keys(d.month_marks).forEach(function(s){ _monthMarks[s] = d.month_marks[s]; });
+                _monthMarks['__month'] = mKey;
+                calRender();
+            }
+        })
+        .catch(function(){ body.innerHTML='<p class="cal-detail__empty">Ошибка сети.</p>'; });
+    }
+
+    function renderTimeline(events, body, dateKey){
+        if(!events.length){
+            body.innerHTML = '<p class="cal-detail__empty">В этот день ничего не было. Напишите заметку ниже!</p>';
+            return;
+        }
+        var groups = [
+            {key:'application', label:'📩 Отклики',        items:[]},
+            {key:'interview',   label:'🎤 Собеседования',  items:[]},
+            {key:'note',        label:'📝 Заметки',        items:[]},
+        ];
+        var map = {}; groups.forEach(function(g){ map[g.key]=g; });
+        events.forEach(function(e){ if(map[e.type]) map[e.type].items.push(e); });
+
+        var html = '';
+        groups.forEach(function(g){
+            if(!g.items.length) return;
+            html += '<div class="cal-section-label">'+g.label+'</div>';
+            var last = g.items.length - 1;
+            g.items.forEach(function(ev, idx){
+                var isNote      = ev.type === 'note';
+                var isInterview = ev.type === 'interview' && ev.can_cancel;
+                var delBtn = (isNote || isInterview)
+                    ? '<button class="cal-event__del" data-evt-id="'+ev.id+'" data-evt-type="'+ev.type+'" title="'+(isInterview ? 'Отменить' : 'Удалить')+'">&times;</button>'
+                    : '';
+                var moveBtn = isNote
+                    ? '<button class="cal-event__move" data-note-move-id="'+ev.id+'" data-note-move-time="'+_esc(ev.note_time_raw||'')+'" title="Перенести на дату">📅</button>'
+                    : '';
+                var noteAttrs = isNote
+                    ? ' data-note-editable="1" data-note-id="'+ev.id+'" data-note-title="'+_esc(ev.title||'')+'"\
+ data-note-body="'+_esc(ev.body||'')+'" data-note-color="'+_esc(ev.color||'#c2a35a')+'" data-note-time="'+_esc(ev.note_time_raw||'')+'" data-note-date="'+dateKey+'" draggable="true"\
+ style="cursor:pointer"'
+                    : '';
+                html += '<div class="cal-event'+(isNote?' cal-event--note':'')+'"\
+'+noteAttrs+'>'
+                    + '<span class="cal-event__time">'+ev.time+'</span>'
+                    + '<div class="cal-event__line">'
+                    +   '<span class="cal-event__dot" style="background:'+ev.color+'"></span>'
+                    +   (idx < last ? '<span class="cal-event__connector"></span>' : '')
+                    + '</div>'
+                    + '<div class="cal-event__body">'
+                    +   '<div class="cal-event__title">'+_esc(ev.title)+'</div>'
+                    +   (ev.sub ? '<div class="cal-event__sub">'+_esc(ev.sub)+'</div>' : '')
+                    + '</div>'
+                    + moveBtn
+                    + delBtn
+                    + '</div>';
+            });
+        });
+        body.innerHTML = html;
+
+        body.querySelectorAll('.cal-event--note[data-note-editable]').forEach(function(el){
+            el.addEventListener('click', function(e){
+                if(e.target.closest('.cal-event__del') || e.target.closest('.cal-event__move')) return;
+                window.openNoteModal({
+                    mode: 'edit',
+                    id:    +el.getAttribute('data-note-id'),
+                    title: el.getAttribute('data-note-title') || '',
+                    body:  el.getAttribute('data-note-body')  || '',
+                    color: el.getAttribute('data-note-color') || '#c2a35a',
+                    time:  el.getAttribute('data-note-time')  || '',
+                    date:  dateKey,
+                    onSaved: function(){ delete _monthMarks[dateKey]; _monthMarks['__month']=null; selectDay(dateKey, +dateKey.split('-')[2]); },
+                });
+            });
+        });
+        body.querySelectorAll('.cal-event__del').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var evtId   = btn.getAttribute('data-evt-id');
+                var evtType = btn.getAttribute('data-evt-type');
+                if(evtType === 'interview'){
+                    cancelInterview(evtId, dateKey, btn);
+                } else {
+                    deleteNote(evtId, dateKey, btn);
+                }
+            });
+        });
+        body.querySelectorAll('.cal-event__move').forEach(function(btn){
+            btn.addEventListener('click', function(e){
+                e.stopPropagation();
+                var noteId = +btn.getAttribute('data-note-move-id');
+                var noteTime = btn.getAttribute('data-note-move-time') || '';
+                var targetDate = prompt('Введите новую дату (YYYY-MM-DD):', dateKey);
+                if (!targetDate) return;
+                targetDate = targetDate.trim();
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+                    alert('Неверный формат даты. Используйте YYYY-MM-DD.');
+                    return;
+                }
+                var dt = new Date(targetDate + 'T00:00:00');
+                if (isNaN(dt.getTime())) {
+                    alert('Некорректная дата.');
+                    return;
+                }
+                moveNoteCompact(noteId, targetDate, dateKey, noteTime);
+            });
+        });
+
+        body.querySelectorAll('.cal-event--note[draggable="true"]').forEach(function(el){
+            el.addEventListener('dragstart', function(e){
+                _calDragNote = {
+                    id: +el.getAttribute('data-note-id'),
+                    fromDate: el.getAttribute('data-note-date') || dateKey,
+                    noteTime: el.getAttribute('data-note-time') || ''
+                };
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            el.addEventListener('dragend', function(){ _calDragNote = null; });
+        });
+    }
+
+    function moveNoteCompact(noteId, newDate, oldDate, noteTime){
+        var payload = {id: noteId, date: newDate};
+        payload.time = noteTime || new Date().toTimeString().slice(0,5);
+        fetch('/accounts/api/calendar/note/', {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            body: JSON.stringify(payload),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.ok){
+                var selectedBefore = _selectedKey;
+                var monthKey = _year + '-' + _pad(_month + 1);
+
+                // Instant visual feedback (no network wait): remove stale dots.
+                delete _monthMarks[oldDate];
+                if (newDate.indexOf(monthKey + '-') === 0) delete _monthMarks[newDate];
+                _monthMarks['__month'] = monthKey;
+                calRender();
+
+                // Single sync refresh: update events + month marks from backend.
+                if (selectedBefore){
+                    selectDay(selectedBefore, +selectedBefore.split('-')[2]);
+                } else {
+                    _monthMarks['__month'] = null;
+                    loadMonthMarks();
+                }
+            }
+        }).catch(function(){});
+    }
+
+    function deleteNote(id, dateKey, btn){
+        btn.disabled = true;
+        fetch('/accounts/api/calendar/note/', {
+            method: 'DELETE',
+            headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            body: JSON.stringify({id: +id}),
+        }).then(function(r){return r.json();}).then(function(d){
+            if(d.ok){
+                delete _monthMarks[dateKey];
+                _monthMarks['__month'] = null;
+                selectDay(dateKey, +dateKey.split('-')[2]);
+            } else { btn.disabled = false; }
+        }).catch(function(){ btn.disabled = false; });
+    }
+
+    function cancelInterview(id, dateKey, btn){
+        if(!confirm('Отменить собеседование?')) return;
+        btn.disabled = true;
+        fetch('/accounts/api/interviews/cancel/', {
+            method: 'DELETE',
+            headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            body: JSON.stringify({id: +id}),
+        }).then(function(r){return r.json();}).then(function(d){
+            if(d.ok){
+                delete _monthMarks[dateKey];
+                _monthMarks['__month'] = null;
+                selectDay(dateKey, +dateKey.split('-')[2]);
+            } else { btn.disabled = false; }
+        }).catch(function(){ btn.disabled = false; });
+    }
+
+    document.getElementById('cal-note-add').addEventListener('click', function(){
+        if(!_selectedKey) return;
+        window.openNoteModal({
+            mode: 'create',
+            date: _selectedKey,
+            onSaved: function(){ delete _monthMarks[_selectedKey]; _monthMarks['__month']=null; selectDay(_selectedKey, +_selectedKey.split('-')[2]); },
+        });
+    });
+
+    document.getElementById('cal-prev').addEventListener('click', function(){
+        _month--; if(_month<0){_month=11;_year--;}
+        _selectedKey=null; _monthMarks={}; _animDir=-1; calRender();
+        document.getElementById('cal-note-form').style.display='none';
+        document.getElementById('cal-day-tl').style.display='none';
+        document.getElementById('cal-detail-date').textContent='Выберите день';
+        document.getElementById('cal-detail-body').innerHTML='<p class="cal-detail__placeholder">Нажмите на любой день, чтобы увидеть расписание.</p>';
+    });
+    document.getElementById('cal-next').addEventListener('click', function(){
+        _month++; if(_month>11){_month=0;_year++;}
+        _selectedKey=null; _monthMarks={}; _animDir=1; calRender();
+        document.getElementById('cal-note-form').style.display='none';
+        document.getElementById('cal-day-tl').style.display='none';
+        document.getElementById('cal-detail-date').textContent='Выберите день';
+        document.getElementById('cal-detail-body').innerHTML='<p class="cal-detail__placeholder">Нажмите на любой день, чтобы увидеть расписание.</p>';
+    });
+    document.getElementById('cal-today').addEventListener('click', function(){
+        var t=new Date(); _year=t.getFullYear(); _month=t.getMonth();
+        _selectedKey=null; _monthMarks={}; calRender();
+        document.getElementById('cal-note-form').style.display='none';
+        document.getElementById('cal-day-tl').style.display='none';
+        document.getElementById('cal-detail-date').textContent='Выберите день';
+        document.getElementById('cal-detail-body').innerHTML='<p class="cal-detail__placeholder">Нажмите на любой день, чтобы увидеть расписание.</p>';
+    });
+
+    function renderHourTl(events, dateLabel){
+        var tl = document.getElementById('cal-day-tl');
+        if(!events || !events.length){ tl.style.display='none'; return; }
+        document.getElementById('cal-day-tl-title').textContent = '🕐 Хронология дня: '+dateLabel;
+        var byHour={}, minH=24, maxH=0;
+        var colorMap={application:'#70b87e',interview:'#9b59b6',note:'#c2a35a'};
+        events.forEach(function(ev){
+            var h=parseInt((ev.time||'00:00').split(':')[0],10);
+            byHour[h]=byHour[h]||[]; byHour[h].push(ev);
+            if(h<minH)minH=h; if(h>maxH)maxH=h;
+        });
+        minH=Math.max(0,minH-1); maxH=Math.min(23,maxH+1);
+        var html='';
+        for(var h=minH;h<=maxH;h++){
+            var evs=byHour[h]||[];
+            var evHtml=evs.map(function(ev){
+                var c=colorMap[ev.type]||'var(--accent)';
+                return '<div class="cal-hour-chip" style="border-color:'+c+'">'
+                    +'<b>'+ev.icon+' '+_esc(ev.title)+'</b>'
+                    +(ev.sub?'<span>'+_esc(ev.sub)+'</span>':'')
+                    +'</div>';
+            }).join('');
+            html+='<div class="cal-hour-row'+(evs.length?' cal-hour-row--has-events':'')
+                +'"><div class="cal-hour-label">'+_pad(h)+':00</div>'
+                +'<div class="cal-hour-events">'+evHtml+'</div></div>';
+        }
+        document.getElementById('cal-day-tl-body').innerHTML=html;
+        tl.style.display='';
+        tl.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+
+    window._calGetState = function(){ return {year: _year, month: _month, selectedKey: _selectedKey}; };
+    window.calRender = calRender;
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   FULLSCREEN CALENDAR  —  features: week view, .ics export,
+                            note search, drag & drop reschedule
+═══════════════════════════════════════════════════════════ */
+var _calApiEventsUrl = '/accounts/api/manager/calendar/events/';
+(function(){
+    'use strict';
+
+    // ── State ─────────────────────────────────────────────────
+    var _fsYear, _fsMonth, _fsSel = null, _fsWkSel = null;
+    var _fsMarkCache = {}, _fsMonthEvents = null;
+    var _fsView = 'month';
+    var _fsWeekDate = null;
+    var _fsDragNote = null;
+    var _fsSearchMatches = {};
+    var _fsSearchOrder = [];
+    var _fsSearchIndex = -1;
+    var _fsSearchSourceEvents = null;
+    var _fsSearchTimer = null;
+
+    var MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    var MONTH_NAMES_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    var DAY_SHORT    = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    var MONTHS_ABR   = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+    var COLOR_MAP    = {view:'#6c9bd2', application:'#70b87e', note:'#c2a35a', interview:'#9b59b6'};
+    var TYPE_LABELS  = {interview:'📅 Собеседования', view:'👁 Просмотры вакансий', application:'📋 Отклики', note:'📝 Заметки'};
+
+    function _pad(n){ return n < 10 ? '0'+n : ''+n; }
+    function _key(y,m,d){ return y+'-'+_pad(m+1)+'-'+_pad(d); }
+    function _csrf(){ var m = document.cookie.match(/csrftoken=([^;]+)/); return m ? m[1] : ''; }
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _parseDateKey(key){
+        var p = (key || '').split('-');
+        if (p.length !== 3) return null;
+        return {year: +p[0], month: (+p[1]) - 1, day: +p[2]};
+    }
+    function _updateSearchNextButton(){
+        var btn = document.getElementById('cal-fs-search-next');
+        if (!btn) return;
+        var total = _fsSearchOrder.length;
+        if (!total){
+            btn.disabled = true;
+            btn.textContent = 'Дальше';
+            return;
+        }
+        btn.disabled = false;
+        btn.textContent = 'Дальше (' + (_fsSearchIndex + 1) + '/' + total + ')';
+    }
+    function _focusSearchMatchByIndex(nextIndex){
+        if (!_fsSearchOrder.length) return;
+        _fsSearchIndex = ((nextIndex % _fsSearchOrder.length) + _fsSearchOrder.length) % _fsSearchOrder.length;
+        var key = _fsSearchOrder[_fsSearchIndex];
+        var parsed = _parseDateKey(key);
+        if (!parsed) return;
+        _fsYear = parsed.year;
+        _fsMonth = parsed.month;
+        _fsSel = key;
+        if (_fsView === 'week'){
+            _fsWeekDate = _weekMonday(key);
+            renderFsWeek();
+            fsselectDayWk(key);
+            document.getElementById('cal-fs-wk-note-form').style.display = '';
+        } else {
+            document.getElementById('cal-fs-btn-month').classList.add('active');
+            document.getElementById('cal-fs-btn-week').classList.remove('active');
+            document.getElementById('cal-fs-month-view').style.display = '';
+            document.getElementById('cal-fs-week-view').style.display = 'none';
+            renderFsMonth();
+            loadFsMonthMarks();
+            fsselectDay(key);
+            document.getElementById('cal-fs-note-form').style.display = '';
+        }
+        _updateSearchNextButton();
+    }
+
+    function openFs(){
+        var st = window._calGetState ? window._calGetState() : null;
+        var now = new Date();
+        _fsYear  = st ? st.year  : now.getFullYear();
+        _fsMonth = st ? st.month : now.getMonth();
+        _fsSel   = st ? st.selectedKey : null;
+        _fsMarkCache = {}; _fsMonthEvents = null; _fsSearchMatches = {}; _fsSearchOrder = []; _fsSearchIndex = -1; _fsSearchSourceEvents = null;
+        _fsWeekDate  = _weekMonday(_fsSel || _key(_fsYear, _fsMonth, now.getDate()));
+        _fsView = 'month';
+        var overlay = document.getElementById('cal-fs-overlay');
+        overlay.style.display = 'flex';
+        document.getElementById('cal-fs-search').value = '';
+        _updateSearchNextButton();
+        document.getElementById('cal-fs-btn-month').classList.add('active');
+        document.getElementById('cal-fs-btn-week').classList.remove('active');
+        document.getElementById('cal-fs-month-view').style.display = '';
+        document.getElementById('cal-fs-week-view').style.display  = 'none';
+        document.body.style.overflow = 'hidden';
+        renderFsMonth();
+        loadFsMonthMarks();
+        if (_fsSel) { fsselectDay(_fsSel); document.getElementById('cal-fs-note-form').style.display = ''; }
+    }
+
+    function closeFs(){
+        var panel = document.querySelector('.cal-fs-panel');
+        panel.classList.add('cal-fs-panel--closing');
+        setTimeout(function(){
+            document.getElementById('cal-fs-overlay').style.display = 'none';
+            panel.classList.remove('cal-fs-panel--closing');
+            document.body.style.overflow = '';
+        }, 180);
+    }
+
+    function setView(v){
+        _fsView = v;
+        document.getElementById('cal-fs-month-view').style.display = v==='month' ? '' : 'none';
+        document.getElementById('cal-fs-week-view').style.display  = v==='week'  ? '' : 'none';
+        document.getElementById('cal-fs-btn-month').classList.toggle('active', v==='month');
+        document.getElementById('cal-fs-btn-week').classList.toggle('active',  v==='week');
+        if (v === 'week') renderFsWeek();
+    }
+
+    function loadFsMonthMarks(){
+        var probe = _fsYear+'-'+_pad(_fsMonth+1)+'-01';
+        if (_fsMarkCache['__month'] === probe){ renderFsMonth(); return; }
+        fetch(_calApiEventsUrl+'?date='+probe)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.month_marks){ Object.assign(_fsMarkCache, d.month_marks); _fsMarkCache['__month'] = probe; }
+                renderFsMonth();
+            });
+    }
+
+    function renderFsMonth(){
+        document.getElementById('cal-fs-month-label').textContent = MONTH_NAMES[_fsMonth]+' '+_fsYear;
+        var now = new Date();
+        var todayKey = _key(now.getFullYear(), now.getMonth(), now.getDate());
+        var first    = new Date(_fsYear, _fsMonth, 1);
+        var startDow = (first.getDay()+6) % 7;
+        var daysInMonth    = new Date(_fsYear, _fsMonth+1, 0).getDate();
+        var daysInPrevMonth= new Date(_fsYear, _fsMonth,   0).getDate();
+        var cells = [];
+        for (var i = startDow-1; i >= 0; i--) cells.push({day: daysInPrevMonth-i, dm: _fsMonth-1, other: true});
+        for (var d = 1; d <= daysInMonth; d++) cells.push({day: d, dm: _fsMonth, other: false});
+        while (cells.length < 42) cells.push({day: cells.length-startDow-daysInMonth+1, dm: _fsMonth+1, other: true});
+
+        var html = '';
+        cells.forEach(function(c){
+            var y = _fsYear, m = c.dm;
+            if (m < 0){ m = 11; y--; } else if (m > 11){ m = 0; y++; }
+            var k = _key(y, m, c.day);
+            var marks   = c.other ? [] : (_fsMarkCache[k] || []);
+            var isMatch = !c.other && !!_fsSearchMatches[k];
+            var css = 'cal-fs-day'
+                + (c.other   ? ' other-month' : '')
+                + (k === todayKey ? ' today'    : '')
+                + (k === _fsSel   ? ' selected' : '')
+                + (isMatch        ? ' has-match': '');
+            var numHtml = (k === todayKey)
+                ? '<div class="cal-fs-day-num"><span>'+c.day+'</span></div>'
+                : '<div class="cal-fs-day-num">'+c.day+'</div>';
+            var dotsHtml = marks.length
+                ? '<div class="cal-fs-day-dots">'+marks.slice(0,5).map(function(col){ return '<span class="cal-fs-day-dot" style="background:'+col+'"></span>'; }).join('')+'</div>'
+                : '';
+            var matchHtml = '';
+            if (isMatch){
+                matchHtml = '<div class="cal-fs-day-events">'+
+                    _fsSearchMatches[k].slice(0,2).map(function(t){
+                        return '<span class="cal-fs-day-event-chip" style="background:#c2a35a28;color:#c2a35a">'+_esc(t.substring(0,20))+'</span>';
+                    }).join('')+'</div>';
+            }
+            var droptarget = c.other ? '' : ' data-droptarget="1"';
+            html += '<div class="'+css+'" data-key="'+k+'"'+droptarget+'>'+numHtml+dotsHtml+matchHtml+'</div>';
+        });
+
+        var grid = document.getElementById('cal-fs-days');
+        grid.innerHTML = html;
+
+        grid.querySelectorAll('.cal-fs-day:not(.other-month)').forEach(function(el){
+            el.addEventListener('click', function(){
+                _fsSel = el.getAttribute('data-key');
+                renderFsMonth();
+                fsselectDay(_fsSel);
+                document.getElementById('cal-fs-note-form').style.display = '';
+            });
+            el.addEventListener('dragover', function(e){
+                if (_fsDragNote){ e.preventDefault(); el.classList.add('drop-target'); }
+            });
+            el.addEventListener('dragleave', function(){ el.classList.remove('drop-target'); });
+            el.addEventListener('drop', function(e){
+                e.preventDefault(); el.classList.remove('drop-target');
+                if (_fsDragNote){
+                    var nd = el.getAttribute('data-key');
+                    if (nd !== _fsDragNote.fromDate) moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, _fsDragNote.noteTime);
+                    _fsDragNote = null;
+                }
+            });
+        });
+    }
+
+    function fsselectDay(key){
+        var body = document.getElementById('cal-fs-detail-body');
+        var parts = key.split('-');
+        document.getElementById('cal-fs-detail-date').textContent =
+            (+parts[2])+' '+MONTH_NAMES_GEN[+parts[1]-1]+' '+(+parts[0]);
+        body.innerHTML = '<p class="cal-loading">Загрузка…</p>';
+        fetch(_calApiEventsUrl+'?date='+key)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (!d.ok){ body.innerHTML = '<p class="cal-detail__empty">Ошибка загрузки.</p>'; return; }
+                renderFsTimeline(d.events, body, key);
+            });
+    }
+
+    function renderFsTimeline(events, body, dateKey){
+        if (!events || !events.length){
+            body.innerHTML = '<p class="cal-detail__placeholder">Нет событий на этот день.</p>';
+            return;
+        }
+        var groups = {};
+        events.forEach(function(ev){ (groups[ev.type] = groups[ev.type]||[]).push(ev); });
+        var order = ['interview','note','application','view'];
+        var html = '';
+        order.forEach(function(type){
+            if (!groups[type] || !groups[type].length) return;
+            html += '<div class="cal-group"><div class="cal-group__label">'+(TYPE_LABELS[type]||type)+'</div>';
+            groups[type].forEach(function(ev){
+                var col = ev.color || COLOR_MAP[type] || 'var(--accent)';
+                var timeStr = ev.time ? '<span class="cal-event__time">'+ev.time+'</span>' : '';
+                var canDel  = (type==='note'      && ev.id);
+                var canCanc = (type==='interview'  && ev.can_cancel && ev.id);
+                var delBtn  = (canDel||canCanc) ? '<button class="cal-event__del" data-evt-id="'+ev.id+'" data-evt-type="'+type+'" title="'+(canCanc?'Отменить':'Удалить')+'">✕</button>' : '';
+                var dragAttr = canDel ? ' draggable="true" data-note-id="'+ev.id+'" data-note-date="'+dateKey+'" data-note-time="'+_esc(ev.note_time_raw||'')+'"' : '';
+                var noteEditAttrs = canDel ? ' data-note-editable="1" data-note-id="'+ev.id+'" data-note-title="'+_esc(ev.title||'')+'" data-note-body="'+_esc(ev.body||'')+'" data-note-color="'+_esc(ev.color||'#c2a35a')+'" data-note-time="'+_esc(ev.note_time_raw||'')+'"' : '';
+                var linkBtn = ev.url ? ' <a class="cal-event__link-btn" href="'+ev.url+'" target="_blank" rel="noopener" title="Открыть вакансию">&#8599;</a>' : '';
+                html += '<div class="cal-event'+(canDel?' cal-event--note':'')+'"'+dragAttr+noteEditAttrs+' style="border-left-color:'+col+'"><div class="cal-event__main">'+timeStr+'<span class="cal-event__icon">'+(ev.icon||'')+'</span><span class="cal-event__title">'+(ev.url ? '<a class="cal-event__link" href="'+ev.url+'" target="_blank" rel="noopener">'+_esc(ev.title||'')+'<span class="cal-event__link-arrow">&#8599;</span></a>' : _esc(ev.title||''))+'</span>';
+                if (ev.sub) html += '<p class="cal-event__sub">'+_esc(ev.sub)+'</p>';
+                html += '</div>'+delBtn+'</div>';
+            });
+            html += '</div>';
+        });
+        body.innerHTML = html;
+
+        body.querySelectorAll('.cal-event--note[data-note-editable]').forEach(function(el){
+            el.addEventListener('click', function(e){
+                if(e.target.closest('.cal-event__del')) return;
+                window.openNoteModal({
+                    mode: 'edit',
+                    id:    +el.getAttribute('data-note-id'),
+                    title: el.getAttribute('data-note-title') || '',
+                    body:  el.getAttribute('data-note-body')  || '',
+                    color: el.getAttribute('data-note-color') || '#c2a35a',
+                    time:  el.getAttribute('data-note-time')  || '',
+                    date:  dateKey,
+                    onSaved: function(){ _fsRefreshDay(dateKey); },
+                });
+            });
+        });
+        body.querySelectorAll('.cal-event__del').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var id = btn.getAttribute('data-evt-id');
+                var type = btn.getAttribute('data-evt-type');
+                if (type === 'interview'){
+                    if (!confirm('Отменить собеседование?')) return;
+                    btn.disabled = true;
+                    fetch('/accounts/api/interviews/cancel/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},body:JSON.stringify({id:+id})})
+                        .then(function(r){return r.json();}).then(function(d){
+                            if (d.ok){ _fsRefreshDay(dateKey); }
+                            else btn.disabled = false;
+                        }).catch(function(){ btn.disabled = false; });
+                } else {
+                    btn.disabled = true;
+                    fetch('/accounts/api/calendar/note/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},body:JSON.stringify({id:+id})})
+                        .then(function(r){return r.json();}).then(function(d){
+                            if (d.ok){ _fsRefreshDay(dateKey); }
+                            else btn.disabled = false;
+                        }).catch(function(){ btn.disabled = false; });
+                }
+            });
+        });
+
+        body.querySelectorAll('[draggable="true"]').forEach(function(el){
+            el.addEventListener('dragstart', function(e){
+                _fsDragNote = {id:+el.getAttribute('data-note-id'), fromDate:el.getAttribute('data-note-date'), noteTime: el.getAttribute('data-note-time')||''};
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            el.addEventListener('dragend', function(){ _fsDragNote = null; });
+        });
+    }
+
+    function _invalidateDay(key){
+        delete _fsMarkCache[key]; _fsMarkCache['__month'] = null; _fsMonthEvents = null;
+    }
+    function _fsRefreshDay(key){
+        _invalidateDay(key);
+        if (_fsView === 'week') { fsselectDayWk(key); renderFsWeek(); }
+        else { fsselectDay(key); renderFsMonth(); }
+    }
+
+    function moveNote(noteId, newDate, oldDate, noteTime){
+        var payload = {id: noteId, date: newDate};
+        payload.time = noteTime || new Date().toTimeString().slice(0,5);
+        fetch('/accounts/api/calendar/note/', {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            body: JSON.stringify(payload),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.ok){
+                _invalidateDay(oldDate); _invalidateDay(newDate);
+                loadFsMonthMarks();
+                if (_fsSel === oldDate){ fsselectDay(oldDate); }
+                else if (_fsSel === newDate){ fsselectDay(newDate); }
+            }
+        });
+    }
+
+    document.getElementById('cal-fs-note-add').addEventListener('click', function(){
+        if (!_fsSel) return;
+        window.openNoteModal({
+            mode: 'create', date: _fsSel,
+            onSaved: function(){ _invalidateDay(_fsSel); fsselectDay(_fsSel); renderFsMonth(); },
+        });
+    });
+
+    document.getElementById('cal-fs-wk-note-add').addEventListener('click', function(){
+        if (!_fsWkSel) return;
+        window.openNoteModal({
+            mode: 'create', date: _fsWkSel,
+            onSaved: function(){ _invalidateDay(_fsWkSel); fsselectDayWk(_fsWkSel); renderFsWeek(); },
+        });
+    });
+
+    function _weekMonday(key){
+        var p = key.split('-');
+        var d = new Date(+p[0], +p[1]-1, +p[2]);
+        var dow = (d.getDay()+6) % 7;
+        d.setDate(d.getDate()-dow);
+        return d;
+    }
+
+    function renderFsWeek(){
+        if (!_fsWeekDate) _fsWeekDate = _weekMonday(_key(_fsYear, _fsMonth, new Date().getDate()));
+        var days = [];
+        for (var i = 0; i < 7; i++){
+            var d = new Date(_fsWeekDate);
+            d.setDate(_fsWeekDate.getDate()+i);
+            days.push(d);
+        }
+        var now = new Date();
+        var todayKey = _key(now.getFullYear(), now.getMonth(), now.getDate());
+        var first = days[0], last = days[6];
+        document.getElementById('cal-fs-month-label').textContent =
+            first.getDate()+' '+MONTHS_ABR[first.getMonth()]+
+            ' — '+last.getDate()+' '+MONTHS_ABR[last.getMonth()]+' '+last.getFullYear();
+
+        var hHtml = '<div class="cal-wk-th-spacer"></div>';
+        days.forEach(function(d, i){
+            var k = _key(d.getFullYear(), d.getMonth(), d.getDate());
+            var cls = 'cal-wk-th'+(k===todayKey?' today-col':'')+(i>=5?' weekend-col':'')+(k===_fsWkSel?' cal-wk-th--selected':'');
+            hHtml += '<div class="'+cls+'" data-key="'+k+'" title="Показать день" style="cursor:pointer">'+DAY_SHORT[i]+'<b>'+d.getDate()+' '+MONTHS_ABR[d.getMonth()]+'</b></div>';
+        });
+        var hdr = document.getElementById('cal-fs-wk-header');
+        hdr.innerHTML = hHtml;
+        hdr.querySelectorAll('.cal-wk-th[data-key]').forEach(function(th){
+            th.addEventListener('click', function(){ fsselectDayWk(th.getAttribute('data-key')); });
+        });
+
+        var promises = days.map(function(d){
+            var k = _key(d.getFullYear(), d.getMonth(), d.getDate());
+            return fetch(_calApiEventsUrl+'?date='+k)
+                .then(function(r){ return r.json(); })
+                .then(function(data){ return {key:k, events:data.events||[]}; })
+                .catch(function(){ return {key:k, events:[]}; });
+        });
+        Promise.all(promises).then(function(results){
+            var byDay = {};
+            results.forEach(function(r){ byDay[r.key] = r.events; });
+            _renderWeekGrid(days, byDay, todayKey);
+        });
+    }
+
+    function fsselectDayWk(key){
+        _fsWkSel = key;
+        var body  = document.getElementById('cal-fs-wk-side-body');
+        var form  = document.getElementById('cal-fs-wk-note-form');
+        var label = document.getElementById('cal-fs-wk-side-date');
+        var parts = key.split('-');
+        label.textContent = (+parts[2])+' '+MONTH_NAMES_GEN[+parts[1]-1]+' '+(+parts[0]);
+        body.innerHTML = '<p class="cal-loading">Загрузка…</p>';
+        if (form) form.style.display = '';
+        document.querySelectorAll('#cal-fs-wk-header .cal-wk-th').forEach(function(th){
+            th.classList.toggle('cal-wk-th--selected', th.getAttribute('data-key') === key);
+        });
+        fetch(_calApiEventsUrl+'?date='+key)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (!d.ok){ body.innerHTML = '<p class="cal-detail__empty">Ошибка загрузки.</p>'; return; }
+                renderFsTimeline(d.events, body, key);
+            });
+    }
+
+    function _renderWeekGrid(days, byDay, todayKey){
+        var MAX_CHIPS = 1;
+        var html = '';
+        for (var h = 0; h < 24; h++){
+            html += '<div class="cal-wk-time-cell">'+_pad(h)+':00</div>';
+            days.forEach(function(d, i){
+                var k = _key(d.getFullYear(), d.getMonth(), d.getDate());
+                var evs = (byDay[k]||[]).filter(function(ev){ return ev.time && parseInt(ev.time.split(':')[0],10)===h; });
+                var visible = evs.slice(0, MAX_CHIPS);
+                var extra   = evs.length - MAX_CHIPS;
+                var evHtml  = visible.map(function(ev){
+                    var col = ev.color || COLOR_MAP[ev.type]||'var(--accent)';
+                    var isNote = (ev.type==='note' && ev.id);
+                    var drag = isNote ? ' draggable="true" data-note-id="'+ev.id+'" data-note-date="'+k+'" data-note-time="'+_esc(ev.note_time_raw||'')+'"' : '';
+                    return '<span class="cal-wk-event" style="background:'+col+'"'+drag+'>'+_esc((ev.icon||'')+' '+(ev.title||''))+'</span>';
+                }).join('');
+                if (extra > 0) evHtml += '<span class="cal-wk-more" data-key="'+k+'">+'+extra+' ещё</span>';
+                html += '<div class="cal-wk-day-cell'+(i>=5?' wk-weekend':'')+(k===todayKey?' today-day':'')+(evs.length?' cal-wk-cell--has':'')+'" data-key="'+k+'" data-hour="'+h+'">'+evHtml+'</div>';
+            });
+        }
+        var body = document.getElementById('cal-fs-wk-body');
+        body.innerHTML = html;
+
+        body.querySelectorAll('[draggable="true"]').forEach(function(el){
+            el.addEventListener('dragstart', function(e){
+                _fsDragNote = {id:+el.getAttribute('data-note-id'), fromDate:el.getAttribute('data-note-date'), noteTime: el.getAttribute('data-note-time')||''};
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            el.addEventListener('dragend', function(){ _fsDragNote = null; });
+        });
+        body.querySelectorAll('.cal-wk-day-cell').forEach(function(el){
+            el.addEventListener('click', function(e){
+                if (e.target.getAttribute('draggable')) return;
+                fsselectDayWk(el.getAttribute('data-key'));
+            });
+            el.addEventListener('dragover', function(e){ if (_fsDragNote){ e.preventDefault(); el.classList.add('drop-target'); } });
+            el.addEventListener('dragleave', function(){ el.classList.remove('drop-target'); });
+            el.addEventListener('drop', function(e){
+                e.preventDefault(); el.classList.remove('drop-target');
+                if (_fsDragNote){
+                    var nd = el.getAttribute('data-key');
+                    if (nd !== _fsDragNote.fromDate) moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, _fsDragNote.noteTime);
+                    _fsDragNote = null;
+                    setTimeout(renderFsWeek, 350);
+                }
+            });
+        });
+        body.querySelectorAll('.cal-wk-more').forEach(function(el){
+            el.addEventListener('click', function(e){ e.stopPropagation(); fsselectDayWk(el.getAttribute('data-key')); });
+        });
+        var scroll = document.getElementById('cal-fs-wk-scroll');
+        if (scroll) scroll.scrollTop = Math.max(0, new Date().getHours()*52 - 104);
+    }
+
+    document.getElementById('cal-fs-search').addEventListener('input', function(){
+        var q = this.value.trim().toLowerCase();
+        clearTimeout(_fsSearchTimer);
+        if (!q){
+            _fsSearchMatches = {};
+            _fsSearchOrder = [];
+            _fsSearchIndex = -1;
+            _updateSearchNextButton();
+            renderFsMonth();
+            return;
+        }
+        _fsSearchTimer = setTimeout(function(){ _doSearch(q); }, 280);
+    });
+
+    function _doSearch(q){
+        _loadSearchEvents(function(events){
+            _fsSearchMatches = {};
+            events.forEach(function(ev){
+                if (ev.type === 'note'){
+                    // Support both legacy and current note payload shapes.
+                    var searchIn = (
+                        (ev.title || '') + ' ' +
+                        (ev.text || '') + ' ' +
+                        (ev.body || '') + ' ' +
+                        (ev.sub || '')
+                    ).toLowerCase();
+                    if (searchIn.indexOf(q) !== -1){
+                        _fsSearchMatches[ev.date] = _fsSearchMatches[ev.date]||[];
+                        _fsSearchMatches[ev.date].push(ev.title || ev.text || ev.body || 'Заметка');
+                    }
+                }
+            });
+            _fsSearchOrder = Object.keys(_fsSearchMatches).sort();
+            if (_fsSearchOrder.length){
+                _focusSearchMatchByIndex(0);
+            } else {
+                _fsSearchIndex = -1;
+                _updateSearchNextButton();
+                renderFsMonth();
+            }
+        }, true);
+    }
+
+    function _loadSearchEvents(cb, forceReload){
+        if (_fsSearchSourceEvents && !forceReload){ cb(_fsSearchSourceEvents); return; }
+        fetch('/accounts/api/calendar/notes-index/')
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d && d.ok && Array.isArray(d.events)){
+                    _fsSearchSourceEvents = d.events;
+                    cb(d.events);
+                } else {
+                    cb([]);
+                }
+            })
+            .catch(function(){ cb([]); });
+    }
+
+    document.getElementById('cal-fs-search-next').addEventListener('click', function(){
+        if (!_fsSearchOrder.length) return;
+        _focusSearchMatchByIndex(_fsSearchIndex + 1);
+    });
+
+    function _loadMonthEvents(cb, forceReload){
+        if (_fsMonthEvents && !forceReload){ cb(_fsMonthEvents); return; }
+        fetch('/accounts/api/calendar/month/?year='+_fsYear+'&month='+(_fsMonth+1))
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d && d.ok && Array.isArray(d.events)){
+                    _fsMonthEvents = d.events;
+                    cb(d.events);
+                } else {
+                    cb([]);
+                }
+            })
+            .catch(function(){ cb([]); });
+    }
+
+    function exportIcs(){
+        _loadMonthEvents(function(events){
+            var lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//JobFlex//Calendar//RU','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+            events.forEach(function(ev){
+                var dateStr = (ev.date||'').replace(/-/g,'');
+                var dtStart, dtEnd;
+                if (ev.time){
+                    var tc = ev.time.replace(':','');
+                    dtStart = dateStr+'T'+tc+'00';
+                    var eh  = Math.min(23, parseInt(ev.time.split(':')[0],10)+1);
+                    dtEnd   = dateStr+'T'+_pad(eh)+(ev.time.split(':')[1]||'00')+'00';
+                } else {
+                    dtStart = dtEnd = dateStr;
+                }
+                var summary = ev.type==='note' ? (ev.title || ev.text||'') : (ev.title||'Событие');
+                var desc    = ev.type==='note' ? (ev.text||'') : (ev.type==='interview' ? ('Компания: '+(ev.company||'')+(ev.location?'\nАдрес: '+ev.location:'')) : '');
+                lines.push('BEGIN:VEVENT');
+                lines.push('UID:'+ev.type+'-'+(ev.id||Math.random())+'-jobflex@calendar');
+                if (ev.time){ lines.push('DTSTART:'+dtStart); lines.push('DTEND:'+dtEnd); }
+                else         { lines.push('DTSTART;VALUE=DATE:'+dtStart); lines.push('DTEND;VALUE=DATE:'+dtEnd); }
+                lines.push('SUMMARY:'+_icsFold(_icsEsc(summary)));
+                if (desc) lines.push('DESCRIPTION:'+_icsFold(_icsEsc(desc)));
+                lines.push('END:VEVENT');
+            });
+            lines.push('END:VCALENDAR');
+            var blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
+            var url  = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'calendar-'+_fsYear+'-'+_pad(_fsMonth+1)+'.ics';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+        });
+    }
+    function _icsEsc(s){ return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n'); }
+    function _icsFold(s){
+        if (s.length <= 75) return s;
+        var out = s.substring(0,75), rest = s.substring(75);
+        while (rest.length){ out += '\r\n '+rest.substring(0,74); rest = rest.substring(74); }
+        return out;
+    }
+
+    document.getElementById('cal-fs-prev').addEventListener('click', function(){
+        if (_fsView === 'week'){
+            _fsWeekDate.setDate(_fsWeekDate.getDate()-7); renderFsWeek();
+        } else {
+            _fsMonth--; if (_fsMonth<0){ _fsMonth=11; _fsYear--; }
+            _fsMarkCache={}; _fsMonthEvents=null; _fsSearchMatches={}; _fsSel=null;
+            renderFsMonth(); loadFsMonthMarks();
+        }
+    });
+    document.getElementById('cal-fs-next').addEventListener('click', function(){
+        if (_fsView === 'week'){
+            _fsWeekDate.setDate(_fsWeekDate.getDate()+7); renderFsWeek();
+        } else {
+            _fsMonth++; if (_fsMonth>11){ _fsMonth=0; _fsYear++; }
+            _fsMarkCache={}; _fsMonthEvents=null; _fsSearchMatches={}; _fsSel=null;
+            renderFsMonth(); loadFsMonthMarks();
+        }
+    });
+    document.getElementById('cal-fs-today').addEventListener('click', function(){
+        var t = new Date();
+        _fsYear=t.getFullYear(); _fsMonth=t.getMonth();
+        _fsSel = _key(_fsYear, _fsMonth, t.getDate());
+        _fsMarkCache={}; _fsMonthEvents=null; _fsSearchMatches={};
+        _fsWeekDate = _weekMonday(_fsSel);
+        if (_fsView==='week'){ renderFsWeek(); }
+        else { renderFsMonth(); loadFsMonthMarks(); fsselectDay(_fsSel); document.getElementById('cal-fs-note-form').style.display=''; }
+    });
+    document.getElementById('cal-fs-btn-month').addEventListener('click', function(){ setView('month'); });
+    document.getElementById('cal-fs-btn-week').addEventListener('click',  function(){ setView('week');  });
+    document.getElementById('cal-fs-export-ics').addEventListener('click', exportIcs);
+    document.getElementById('cal-fs-close').addEventListener('click', closeFs);
+    document.getElementById('cal-fs-open').addEventListener('click',  openFs);
+    document.getElementById('cal-fs-overlay').addEventListener('click', function(e){ if (e.target===this) closeFs(); });
+    document.addEventListener('keydown', function(e){
+        if (e.key==='Escape' && document.getElementById('cal-fs-overlay').style.display!=='none') closeFs();
+    });
+})();
+
+/* ════════════════════════════════════════════════════════
+   Note popup modal
+════════════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    var PALETTE = ['#c2a35a','#e05252','#70b87e','#6c9bd2','#9b59b6','#e8a838','#4bbfa6','#ec6fae'];
+    var _currentColor = '#c2a35a';
+    var _onSaved = null;
+    var _editId  = null;
+    var _editDate = null;
+
+    var overlay  = document.getElementById('note-modal-overlay');
+    var heading  = document.getElementById('note-modal-heading');
+    var titleEl  = document.getElementById('note-modal-title');
+    var bodyEl   = document.getElementById('note-modal-body');
+    var timeEl   = document.getElementById('note-modal-time');
+    var saveBtn  = document.getElementById('note-modal-save');
+    var colorRow = document.getElementById('note-modal-color-row');
+    var customIn = document.getElementById('note-modal-color-custom');
+
+    function _csrf(){ var m = document.cookie.match(/csrftoken=([^;]+)/); return m ? m[1] : ''; }
+
+    function _setColor(c){
+        _currentColor = c;
+        colorRow.querySelectorAll('.note-modal__color-swatch').forEach(function(sw){
+            sw.classList.toggle('active', sw.getAttribute('data-color') === c);
+        });
+        var wrap = colorRow.querySelector('.note-modal__color-custom-wrap');
+        if (wrap) wrap.style.background = PALETTE.indexOf(c) === -1 ? c : '';
+    }
+
+    colorRow.querySelectorAll('.note-modal__color-swatch').forEach(function(sw){
+        sw.addEventListener('click', function(){ _setColor(sw.getAttribute('data-color')); });
+    });
+
+    customIn.addEventListener('input', function(){ _setColor(customIn.value); });
+    customIn.addEventListener('change', function(){ _setColor(customIn.value); });
+
+    function openModal(opts){
+        _onSaved  = opts.onSaved || null;
+        _editId   = opts.mode === 'edit' ? opts.id : null;
+        _editDate = opts.date;
+        heading.textContent = opts.mode === 'edit' ? 'Редактировать заметку' : 'Новая заметка';
+        titleEl.value = opts.title || '';
+        bodyEl.value  = opts.body  || '';
+        timeEl.value  = opts.time  || '';
+        _setColor(opts.color || '#c2a35a');
+        customIn.value = opts.color || '#c2a35a';
+        saveBtn.disabled = false;
+        overlay.style.display = 'flex';
+        setTimeout(function(){ titleEl.focus(); }, 50);
+    }
+    window.openNoteModal = openModal;
+
+    function closeModal(){
+        overlay.style.display = 'none';
+    }
+
+    document.getElementById('note-modal-close').addEventListener('click', closeModal);
+    document.getElementById('note-modal-cancel').addEventListener('click', closeModal);
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && overlay.style.display !== 'none') closeModal();
+    });
+
+    saveBtn.addEventListener('click', function(){
+        var title = titleEl.value.trim();
+        var body  = bodyEl.value.trim();
+        if (!title && !body){ titleEl.focus(); return; }
+
+        saveBtn.disabled = true;
+
+        var payload = {
+            title: title,
+            text:  body,
+            color: _currentColor,
+            time:  timeEl.value || null,
+        };
+
+        var method, url = '/accounts/api/calendar/note/';
+        if (_editId){
+            method = 'PATCH';
+            payload.id = _editId;
+        } else {
+            method = 'POST';
+            payload.date = _editDate;
+        }
+
+        fetch(url, {
+            method: method,
+            headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            body: JSON.stringify(payload),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            saveBtn.disabled = false;
+            if (d.ok || d.id){
+                closeModal();
+                if (_onSaved) _onSaved();
+            }
+        }).catch(function(){ saveBtn.disabled = false; });
+    });
+})();
+</script>
+{% include 'includes/site_footer.html' %}
+</body>
+</html>

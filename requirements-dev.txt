@@ -1,0 +1,8 @@
+flake8
+flake8-html
+pytest
+pytest-django
+pytest-cov
+bandit
+locust
+faker

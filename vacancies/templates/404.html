@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}404 — Страница не найдена · JobFlex{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'vacancies/css/error-pages.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+{% if user.is_authenticated %}
+    <a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+{% else %}
+    <a class="btn-link" href="{% url 'accounts:login' %}">Войти</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="notfound-wrap">
+    <div class="notfound-code">404</div>
+    <div class="notfound-divider"></div>
+    <div class="notfound-title">Страница не найдена</div>
+    <p class="notfound-sub">
+        Возможно, ссылка устарела, была удалена или вы ввели адрес с ошибкой.
+    </p>
+    <div class="notfound-actions">
+        <a href="/" class="btn-primary notfound-btn-link">🏠 На главную</a>
+        <a href="javascript:history.back()" class="btn notfound-btn-link">← Назад</a>
+    </div>
+</div>
+{% endblock %}

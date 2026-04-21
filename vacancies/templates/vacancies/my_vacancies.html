@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}JobFlex — Мои вакансии{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'vacancies/css/my-vacancies.css' %}">
+    
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn-link" href="{% url 'accounts:profile' %}">Профиль</a>
+{% endblock %}
+
+{% block content %}
+    <main class="my-page">
+        <div class="my-header">
+            <h2>Мои вакансии</h2>
+            <a class="btn-primary my-create-btn" href="{% url 'vacancy-create' %}">
+                + Создать вакансию
+            </a>
+        </div>
+
+        {% if vacancies %}
+            {% for vac in vacancies %}
+            <div class="vac-row{% if not vac.is_active %} archived{% endif %}" id="vac-row-{{ vac.pk }}">
+                <div class="vac-row-info">
+                    <a class="vac-row-title" href="{% url 'vacancy-detail' vac.external_id %}">{{ vac.title }}{% if not vac.is_active %}<span class="badge-archived">Архив</span>{% endif %}</a>
+                    <div class="vac-row-company">{{ vac.company }}{% if vac.region %} · {{ vac.region }}{% endif %}</div>
+                    <div class="vac-row-meta">
+                        <span>🕐 {{ vac.published_at|date:"d.m.Y" }}</span>
+                        {% if vac.salary_from or vac.salary_to %}
+                        <span class="salary-badge">
+                            {% if vac.salary_from %}от {{ vac.salary_from }} {% endif %}
+                            {% if vac.salary_to %}до {{ vac.salary_to }} {% endif %}
+                            {{ vac.salary_currency }}
+                        </span>
+                        {% endif %}
+                        {% if vac.experience_name %}<span>{{ vac.experience_name }}</span>{% endif %}
+                        {% with cnt=vac.applications.count %}
+                        {% if cnt %}
+                        <a class="applications-link" href="{% url 'accounts:vacancy_applications' vac.pk %}">
+                            👥 Откликнулось: {{ cnt }}
+                        </a>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+                <div class="vac-row-actions">
+                    <a class="btn-sm btn-sm-outline" href="{% url 'vacancy-edit' vac.pk %}">✏️ Редактировать</a>
+                    <button class="btn-sm btn-sm-archive toggle-active-btn"
+                            data-pk="{{ vac.pk }}"
+                            data-active="{{ vac.is_active|yesno:'true,false' }}">
+                        {% if vac.is_active %}📦 В архив{% else %}♻️ Восстановить{% endif %}
+                    </button>
+                    <form method="post" action="{% url 'vacancy-delete' vac.pk %}" class="my-delete-form">
+                        {% csrf_token %}
+                        <button type="button" class="btn-sm btn-sm-danger"
+                                onclick="if(confirm('Удалить вакансию «{{ vac.title }}»?')) this.closest('form').submit()">
+                            🗑
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <span class="emoji">📄</span>
+                <p>У вас ещё нет опубликованных вакансий.</p>
+                <a class="btn-primary" href="{% url 'vacancy-create' %}"
+                   class="my-create-btn my-create-btn--first">
+                    Создать первую вакансию
+                </a>
+            </div>
+        {% endif %}
+    </main>
+{% endblock %}
+
+{% block extra_scripts %}
+    <script>
+    var CSRF = document.cookie.match(/csrftoken=([^;]+)/);
+    CSRF = CSRF ? CSRF[1] : '';
+
+    /* ── Archive / restore vacancy ──────────────────── */
+    document.querySelectorAll('.toggle-active-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var pk = this.dataset.pk;
+            var self = this;
+            self.disabled = true;
+            fetch('/' + pk + '/toggle-active/', {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: { 'X-CSRFToken': CSRF }
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                self.disabled = false;
+                if (!d.ok) { alert('Ошибка.'); return; }
+                var row = document.getElementById('vac-row-' + pk);
+                var titleEl = row.querySelector('.vac-row-title');
+                var badge   = titleEl.querySelector('.badge-archived');
+                if (d.is_active) {
+                    row.classList.remove('archived');
+                    if (badge) badge.remove();
+                    self.textContent = '📦 В архив';
+                    self.dataset.active = 'true';
+                } else {
+                    row.classList.add('archived');
+                    if (!badge) {
+                        var b = document.createElement('span');
+                        b.className = 'badge-archived'; b.textContent = 'Архив';
+                        titleEl.appendChild(b);
+                    }
+                    self.textContent = '♻️ Восстановить';
+                    self.dataset.active = 'false';
+                }
+            })
+            .catch(function(){ self.disabled = false; alert('Сетевая ошибка.'); });
+        });
+    });
+    </script>
+    <script src="{% static 'vacancies/js/macros.js' %}"></script>
+{% endblock %}

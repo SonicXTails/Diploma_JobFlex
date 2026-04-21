@@ -1,0 +1,1162 @@
+<!doctype html>
+
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Вакансии — Агрегатор</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <script>
+            (function(){
+                try{
+                    var key = 'site_theme';
+                    var saved = localStorage.getItem(key);
+                    if(saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                        document.documentElement.classList.add('theme-dark');
+                    }
+                }catch(e){}
+            })();
+        </script>
+    <link rel="stylesheet" href="/static/vacancies/css/styles.css">
+    <!-- Magic CSS animations (from plugins) -->
+    <link rel="stylesheet" href="/static/vacancies/css/plugins/magic/magic.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <div class="logo-icon">💼</div>
+                <h1>Вакансии</h1>
+            </a>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="filters">
+            <div class="filters-title">Фильтры</div>
+            <form method="get" class="filters-grid">
+                <div class="field full">
+                    <label>Поиск</label>
+                    <input type="text" name="q" value="" placeholder="Название вакансии, ключевые слова...">
+                </div>
+                <div class="field">
+                    <label>Регион</label>
+                    <select name="region">
+                        <option value="">Все регионы</option>
+                        
+                            <option value="Алтайский край" >Алтайский край</option>
+                        
+                            <option value="Амурская область" >Амурская область</option>
+                        
+                            <option value="Архангельская область" >Архангельская область</option>
+                        
+                            <option value="Астраханская область" >Астраханская область</option>
+                        
+                            <option value="Белгородская область" >Белгородская область</option>
+                        
+                            <option value="Брянская область" >Брянская область</option>
+                        
+                            <option value="Владимирская область" >Владимирская область</option>
+                        
+                            <option value="Волгоградская область" >Волгоградская область</option>
+                        
+                            <option value="Вологодская область" >Вологодская область</option>
+                        
+                            <option value="Воронежская область" >Воронежская область</option>
+                        
+                            <option value="Донецкая Народная Республика" >Донецкая Народная Республика</option>
+                        
+                            <option value="Еврейская АО" >Еврейская АО</option>
+                        
+                            <option value="Забайкальский край" >Забайкальский край</option>
+                        
+                            <option value="Запорожская область" >Запорожская область</option>
+                        
+                            <option value="Ивановская область" >Ивановская область</option>
+                        
+                            <option value="Иркутская область" >Иркутская область</option>
+                        
+                            <option value="Кабардино-Балкарская республика" >Кабардино-Балкарская республика</option>
+                        
+                            <option value="Калининградская область" >Калининградская область</option>
+                        
+                            <option value="Калужская область" >Калужская область</option>
+                        
+                            <option value="Камчатский край" >Камчатский край</option>
+                        
+                            <option value="Карачаево-Черкесская Республика" >Карачаево-Черкесская Республика</option>
+                        
+                            <option value="Кемеровская область" >Кемеровская область</option>
+                        
+                            <option value="Кировская область" >Кировская область</option>
+                        
+                            <option value="Костромская область" >Костромская область</option>
+                        
+                            <option value="Краснодарский край" >Краснодарский край</option>
+                        
+                            <option value="Красноярский край" >Красноярский край</option>
+                        
+                            <option value="Курганская область" >Курганская область</option>
+                        
+                            <option value="Курская область" >Курская область</option>
+                        
+                            <option value="Ленинградская область" >Ленинградская область</option>
+                        
+                            <option value="Липецкая область" >Липецкая область</option>
+                        
+                            <option value="Луганская Народная Республика" >Луганская Народная Республика</option>
+                        
+                            <option value="Магаданская область" >Магаданская область</option>
+                        
+                            <option value="Москва" >Москва</option>
+                        
+                            <option value="Московская область" >Московская область</option>
+                        
+                            <option value="Мурманская область" >Мурманская область</option>
+                        
+                            <option value="Ненецкий АО" >Ненецкий АО</option>
+                        
+                            <option value="Нижегородская область" >Нижегородская область</option>
+                        
+                            <option value="Новгородская область" >Новгородская область</option>
+                        
+                            <option value="Новосибирская область" >Новосибирская область</option>
+                        
+                            <option value="Омская область" >Омская область</option>
+                        
+                            <option value="Оренбургская область" >Оренбургская область</option>
+                        
+                            <option value="Орловская область" >Орловская область</option>
+                        
+                            <option value="Пензенская область" >Пензенская область</option>
+                        
+                            <option value="Пермский край" >Пермский край</option>
+                        
+                            <option value="Приморский край" >Приморский край</option>
+                        
+                            <option value="Псковская область" >Псковская область</option>
+                        
+                            <option value="Республика Адыгея" >Республика Адыгея</option>
+                        
+                            <option value="Республика Алтай" >Республика Алтай</option>
+                        
+                            <option value="Республика Башкортостан" >Республика Башкортостан</option>
+                        
+                            <option value="Республика Бурятия" >Республика Бурятия</option>
+                        
+                            <option value="Республика Дагестан" >Республика Дагестан</option>
+                        
+                            <option value="Республика Ингушетия" >Республика Ингушетия</option>
+                        
+                            <option value="Республика Калмыкия" >Республика Калмыкия</option>
+                        
+                            <option value="Республика Карелия" >Республика Карелия</option>
+                        
+                            <option value="Республика Коми" >Республика Коми</option>
+                        
+                            <option value="Республика Крым" >Республика Крым</option>
+                        
+                            <option value="Республика Марий Эл" >Республика Марий Эл</option>
+                        
+                            <option value="Республика Мордовия" >Республика Мордовия</option>
+                        
+                            <option value="Республика Саха (Якутия)" >Республика Саха (Якутия)</option>
+                        
+                            <option value="Республика Северная Осетия-Алания" >Республика Северная Осетия-Алания</option>
+                        
+                            <option value="Республика Татарстан" >Республика Татарстан</option>
+                        
+                            <option value="Республика Тыва" >Республика Тыва</option>
+                        
+                            <option value="Республика Хакасия" >Республика Хакасия</option>
+                        
+                            <option value="Ростовская область" >Ростовская область</option>
+                        
+                            <option value="Рязанская область" >Рязанская область</option>
+                        
+                            <option value="Самарская область" >Самарская область</option>
+                        
+                            <option value="Санкт-Петербург" >Санкт-Петербург</option>
+                        
+                            <option value="Саратовская область" >Саратовская область</option>
+                        
+                            <option value="Сахалинская область" >Сахалинская область</option>
+                        
+                            <option value="Свердловская область" >Свердловская область</option>
+                        
+                            <option value="Смоленская область" >Смоленская область</option>
+                        
+                            <option value="Ставропольский край" >Ставропольский край</option>
+                        
+                            <option value="Тамбовская область" >Тамбовская область</option>
+                        
+                            <option value="Тверская область" >Тверская область</option>
+                        
+                            <option value="Томская область" >Томская область</option>
+                        
+                            <option value="Тульская область" >Тульская область</option>
+                        
+                            <option value="Тюменская область" >Тюменская область</option>
+                        
+                            <option value="Удмуртская Республика" >Удмуртская Республика</option>
+                        
+                            <option value="Ульяновская область" >Ульяновская область</option>
+                        
+                            <option value="Хабаровский край" >Хабаровский край</option>
+                        
+                            <option value="Ханты-Мансийский АО - Югра" >Ханты-Мансийский АО - Югра</option>
+                        
+                            <option value="Херсонская область" >Херсонская область</option>
+                        
+                            <option value="Челябинская область" >Челябинская область</option>
+                        
+                            <option value="Чеченская республика" >Чеченская республика</option>
+                        
+                            <option value="Чувашская Республика" >Чувашская Республика</option>
+                        
+                            <option value="Чукотский АО" >Чукотский АО</option>
+                        
+                            <option value="Ямало-Ненецкий АО" >Ямало-Ненецкий АО</option>
+                        
+                            <option value="Ярославская область" >Ярославская область</option>
+                        
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Опыт работы</label>
+                    <select name="experience">
+                        <option value="">Любой опыт</option>
+                        
+                            <option value="moreThan6" >Более 6 лет</option>
+                        
+                            <option value="noExperience" >Нет опыта</option>
+                        
+                            <option value="between1And3" >От 1 года до 3 лет</option>
+                        
+                            <option value="between3And6" >От 3 до 6 лет</option>
+                        
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Работодатель</label>
+                    <input type="text" name="employer" value="" placeholder="Название компании">
+                </div>
+                <div class="field">
+                    <label>Навыки</label>
+                    <input type="text" name="skills" value="" placeholder="python, django, sql">
+                </div>
+                <div class="field">
+                    <label>Зарплата от</label>
+                    <input type="text" name="salary_min" value="" placeholder="50 000">
+                </div>
+                <div class="field">
+                    <label>Зарплата до</label>
+                    <input type="text" name="salary_max" value="" placeholder="150 000">
+                </div>
+                <div class="field">
+                    <label>Сортировка</label>
+                    <select name="sort">
+                        <option value="">По умолчанию</option>
+                        <option value="newest" >Сначала новые</option>
+                        <option value="salary" >По зарплате</option>
+                    </select>
+                </div>
+                <div class="field-inline">
+                    <label class="checkbox">
+                        <input type="checkbox" name="only_with_salary" value="1" >
+                        Только с зарплатой
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="newest" value="1" >
+                        Самые свежие
+                    </label>
+                </div>
+                <div class="field actions">
+                    <button type="submit" class="btn-primary">Найти</button>
+                    <a href="/" class="btn-link">Сбросить</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="results">
+            <div class="results-head">
+                <div>Найдено: <strong>3055</strong> вакансий</div>
+                <div class="results-meta">Страница 1 из 153</div>
+            </div>
+
+            <div class="vacancies-grid">
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7058280.png" alt="Логотип РПК В Движении">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767526" target="_blank" rel="noopener">Менеджер по продажам (полиграфия)</a>
+                                    <div class="v-company">РПК В Движении <span class="muted">• Дзержинск (Нижегородская область)</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    90000
+                                     — 
+                                    150000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:25">3 hours, 48 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767526" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам (полиграфия)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7058280.png" alt="Логотип РПК В Движении">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767525" target="_blank" rel="noopener">Менеджер по закупкам и снабжению (рекламная продукция)</a>
+                                    <div class="v-company">РПК В Движении <span class="muted">• Дзержинск (Нижегородская область)</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    65000
+                                     — 
+                                    80000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:25">3 hours, 48 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767525" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по закупкам и снабжению (рекламная продукция)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7104065.png" alt="Логотип Цезарь Сателлит">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130326341" target="_blank" rel="noopener">Менеджер по продажам охранных систем</a>
+                                    <div class="v-company">Цезарь Сателлит <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    100000
+                                     — 
+                                    300000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">Гибрид</span>
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:25">3 hours, 48 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130326341" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам охранных систем</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/6707929.jpeg" alt="Логотип Остров Мечты">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130251435" target="_blank" rel="noopener">Менеджер проектов</a>
+                                    <div class="v-company">Остров Мечты <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    160000
+                                     — 
+                                    160000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:25">3 hours, 48 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130251435" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер проектов</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/6776681.jpeg" alt="Логотип Строй Ресурс">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130500318" target="_blank" rel="noopener">Менеджер по продажам</a>
+                                    <div class="v-company">Строй Ресурс <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    140000
+                                     — 
+                                    600000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130500318" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/3896246.png" alt="Логотип HR ГЕНЕРАТОР">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130500308" target="_blank" rel="noopener">Менеджер по продажам на память</a>
+                                    <div class="v-company">HR ГЕНЕРАТОР <span class="muted">• Мексика</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    1000
+                                     — 
+                                    5000
+                                    USD
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">Удалённо</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130500308" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам на память</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1413014.png" alt="Логотип Т8">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/125348834" target="_blank" rel="noopener">Ведущий менеджер по развитию бизнеса ( Телеком.оборудование)</a>
+                                    <div class="v-company">Т8 <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    <span class="muted">Зарплата не указана</span>
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/125348834" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Ведущий менеджер по развитию бизнеса ( Телеком.оборудование)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <div class="company-placeholder">Н</div>
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130444572" target="_blank" rel="noopener">Data Engineer in GIS</a>
+                                    <div class="v-company">Национальный комитет Республики Узбекистан по статистике <span class="muted">• Ташкент</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    1500
+                                     — 
+                                    2000
+                                    USD
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130444572" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Data Engineer in GIS</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/4183311.png" alt="Логотип БС Актив">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130444566" target="_blank" rel="noopener">Менеджер по персоналу</a>
+                                    <div class="v-company">БС Актив <span class="muted">• Санкт-Петербург</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    70000
+                                     — 
+                                    90000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130444566" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по персоналу</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1490168.png" alt="Логотип Баркова Наталья Игори">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130500297" target="_blank" rel="noopener">Sales manager (Менеджер по продажам)</a>
+                                    <div class="v-company">Баркова Наталья Игори <span class="muted">• США</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    1000
+                                     — 
+                                    2500
+                                    USD
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">Удалённо</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130500297" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Sales manager (Менеджер по продажам)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1466984.png" alt="Логотип FIX PRICE">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767489" target="_blank" rel="noopener">Администратор магазина в г. Дзержинск (ул.Гайдара,д.51а)</a>
+                                    <div class="v-company">FIX PRICE <span class="muted">• Дзержинск (Нижегородская область)</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    52800
+                                     — 
+                                    60000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767489" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Администратор магазина в г. Дзержинск (ул.Гайдара,д.51а)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/6995825.jpeg" alt="Логотип СИНЕРГИЯ">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130500296" target="_blank" rel="noopener">Менеджер по онлайн-образованию</a>
+                                    <div class="v-company">СИНЕРГИЯ <span class="muted">• Бобров</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    50000
+                                    
+                                    
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130500296" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по онлайн-образованию</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1393191.png" alt="Логотип ДИКСИ, группа компаний">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/129924373" target="_blank" rel="noopener">Продавец (ул Новочерёмушкинская, д 21А)</a>
+                                    <div class="v-company">ДИКСИ, группа компаний <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    
+                                    
+                                    72265
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/129924373" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Продавец (ул Новочерёмушкинская, д 21А)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7056497.png" alt="Логотип Русская Медиагруппа, радиохолдинг">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767487" target="_blank" rel="noopener">SMM-менеджер</a>
+                                    <div class="v-company">Русская Медиагруппа, радиохолдинг <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    <span class="muted">Зарплата не указана</span>
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">Гибрид</span>
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767487" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">SMM-менеджер</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/5724611.png" alt="Логотип ROGNEDA UC">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130332890" target="_blank" rel="noopener">Региональный менеджер Фармацевтической компании</a>
+                                    <div class="v-company">ROGNEDA UC <span class="muted">• Ташкент</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    12000000
+                                     — 
+                                    20000000
+                                    UZS
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130332890" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Региональный менеджер Фармацевтической компании</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1491374.png" alt="Логотип iQwerty магазин электроники">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130500292" target="_blank" rel="noopener">Менеджер по продажам электроники</a>
+                                    <div class="v-company">iQwerty магазин электроники <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    100000
+                                     — 
+                                    180000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130500292" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам электроники</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1481045.png" alt="Логотип Водагазтепло-Сервис">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767485" target="_blank" rel="noopener">Администратор офиса</a>
+                                    <div class="v-company">Водагазтепло-Сервис <span class="muted">• Санкт-Петербург</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    70000
+                                    
+                                    
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767485" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Администратор офиса</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7116628.jpg" alt="Логотип Инкерман">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767484" target="_blank" rel="noopener">Менеджер отдела логистики (наемный транспорт)</a>
+                                    <div class="v-company">Инкерман <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    100000
+                                    
+                                    
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767484" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер отдела логистики (наемный транспорт)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original/1466984.png" alt="Логотип FIX PRICE">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/128187925" target="_blank" rel="noopener">Продавец-кассир (г. Киров)</a>
+                                    <div class="v-company">FIX PRICE <span class="muted">• Киров (Кировская область)</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    44600
+                                     — 
+                                    52800
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/128187925" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Продавец-кассир (г. Киров)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+                    <article class="vacancy-card" tabindex="0">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <div class="company-placeholder">С</div>
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130018311" target="_blank" rel="noopener">Финансовый менеджер</a>
+                                    <div class="v-company">СЕВЗАПРЕСУРС <span class="muted">• Москва</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    <span class="muted">Зарплата не указана</span>
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:24">3 hours, 49 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130018311" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Финансовый менеджер</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+            </div>
+
+            
+            <nav class="pager">
+                
+                
+                    <a class="pager-link" href="?page=2">Вперёд →</a>
+                
+            </nav>
+            
+        </section>
+    </main>
+    <script src="/static/vacancies/js/theme.js"></script>
+    <script src="/static/vacancies/js/magic-trigger.js"></script>
+</body>
+</html>

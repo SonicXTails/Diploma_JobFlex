@@ -1,0 +1,401 @@
+.adm-page { margin: 40px auto 80px; }
+
+        /* Greeting banner */
+        .adm-banner {
+            background: linear-gradient(135deg, var(--accent) 0%, #a04e30 100%);
+            border-radius: 16px;
+            padding: 36px 40px;
+            color: #fff;
+            margin-bottom: 36px;
+        }
+        .adm-banner__title { font-size: 26px; font-weight: 700; margin: 0 0 8px; }
+        .adm-banner__sub   { font-size: 15px; opacity: .85; margin: 0; }
+        .adm-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,.2);
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 13px; font-weight: 600;
+            margin-top: 16px;
+        }
+
+        /* Stats grid */
+        .adm-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 150px));
+            gap: 14px;
+            margin-bottom: 36px;
+            justify-content: center;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .adm-section-title--center { text-align: center; }
+        .adm-stat {
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 14px;
+            padding: 20px 16px;
+            text-align: center;
+        }
+        .adm-stat__val   { font-size: 32px; font-weight: 700; color: var(--accent); }
+        .adm-stat__label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* Quick links */
+        .adm-links { display: flex; flex-wrap: wrap; gap: 12px; }
+        .adm-links a {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 10px 20px;
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 10px;
+            font-size: 14px; font-weight: 500;
+            color: var(--text);
+            text-decoration: none;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .adm-links a:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(201,100,66,.15); }
+
+        .adm-section-title { font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 14px; }
+
+        /* Backup section */
+        .adm-backup__toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .adm-backup__hint    { font-size: 12px; color: var(--text-secondary); }
+        .adm-backup__list    { display: flex; flex-direction: column; gap: 10px; }
+        .adm-backup__item    {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 12px;
+        }
+        .adm-backup__info    { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .adm-backup__name    { font-size: 13px; font-weight: 600; color: var(--text); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .adm-backup__meta    { font-size: 12px; color: var(--text-secondary); }
+        .adm-btn-primary     {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px;
+            background: var(--accent); color: #fff;
+            border: none; border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: opacity .15s;
+            white-space: nowrap;
+        }
+        .adm-btn-primary:hover   { opacity: .82; }
+        .adm-btn-primary:disabled{ opacity: .5; cursor: default; }
+        .adm-btn-restore     {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 12px;
+            background: transparent; color: #e05252;
+            border: 1.5px solid #e05252; border-radius: 7px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: background .15s, color .15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .adm-btn-restore:hover    { background: #e05252; color: #fff; }
+        .adm-btn-restore:disabled { opacity: .5; cursor: default; }
+        .adm-btn-delete {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 12px;
+            background: transparent; color: var(--text-secondary);
+            border: 1.5px solid var(--card-border); border-radius: 7px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .adm-btn-delete:hover    { background: #e05252; color: #fff; border-color: #e05252; }
+        .adm-btn-delete:disabled { opacity: .5; cursor: default; }
+        #backup-status { font-size: 13px; color: var(--text-secondary); }
+
+        /* API audit log section */
+        .adm-audit-wrap {
+            margin-top: 28px;
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .adm-audit-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--card-border);
+            background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+        }
+        .adm-audit-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .adm-audit-sub {
+            margin: 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .adm-audit-scroll { overflow-x: auto; }
+        .adm-audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 980px;
+            font-size: 12px;
+        }
+        .adm-audit-table th,
+        .adm-audit-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--card-border);
+            vertical-align: top;
+            color: var(--text);
+        }
+        .adm-audit-table th {
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: var(--text-secondary);
+            background: color-mix(in srgb, var(--bg) 75%, var(--surface));
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .adm-audit-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .02em;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .adm-audit-pill--admin { background: rgba(201,100,66,.12); color: #c96442; border-color: rgba(201,100,66,.28); }
+        .adm-audit-pill--manager { background: rgba(83,154,255,.12); color: #3f76b7; border-color: rgba(83,154,255,.28); }
+        .adm-audit-pill--applicant { background: rgba(112,184,126,.12); color: #2d7b45; border-color: rgba(112,184,126,.28); }
+        .adm-audit-pill--user,
+        .adm-audit-pill--system { background: rgba(140,140,140,.13); color: #666; border-color: rgba(140,140,140,.25); }
+        .adm-audit-method { background: rgba(90,90,90,.12); color: var(--text); border-color: rgba(90,90,90,.25); }
+        .adm-audit-method--get { background: rgba(83,154,255,.12); color: #2c5f99; border-color: rgba(83,154,255,.28); }
+        .adm-audit-method--post { background: rgba(70,167,93,.12); color: #2f7a45; border-color: rgba(70,167,93,.28); }
+        .adm-audit-method--patch,
+        .adm-audit-method--put { background: rgba(229,156,52,.14); color: #9a5e0a; border-color: rgba(229,156,52,.3); }
+        .adm-audit-method--delete { background: rgba(224,82,82,.12); color: #a53d3d; border-color: rgba(224,82,82,.3); }
+        .adm-audit-status-ok { color: #2f7a45; font-weight: 700; }
+        .adm-audit-status-fail { color: #a53d3d; font-weight: 700; }
+        .adm-audit-endpoint { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--text-secondary); }
+        .adm-audit-toggle {
+            display: inline-flex;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .adm-audit-toggle button {
+            border: none;
+            background: var(--surface);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 9px;
+            cursor: pointer;
+        }
+        .adm-audit-toggle button.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .adm-audit-payload {
+            margin: 0;
+            padding: 8px;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            background: var(--bg);
+            max-height: 170px;
+            overflow: auto;
+            font-size: 11px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .adm-audit-payload--json {
+            display: none;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .adm-audit-pager {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px 12px;
+            border-top: 1px solid var(--card-border);
+            background: var(--surface);
+            flex-wrap: wrap;
+        }
+        .adm-audit-page-link {
+            border: 1.5px solid var(--card-border);
+            border-radius: 8px;
+            padding: 5px 9px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+            background: var(--surface);
+        }
+        .adm-audit-page-link:hover { border-color: var(--accent); color: var(--accent); }
+        .adm-audit-page-num { font-size: 12px; color: var(--text-secondary); }
+
+        /* ── Admin tabs ────────────────────────────────────────── */
+        .adm-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 28px;
+        }
+        .adm-tab-btn {
+            padding: 9px 22px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1.5px solid var(--card-border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: border-color .15s, color .15s, background .15s;
+        }
+        .adm-tab-btn.active, .adm-tab-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--bg);
+        }
+
+        /* ── Admin macros ─────────────────────────────────────── */
+        .adm-macro-fab {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 10px 28px rgba(0,0,0,.25);
+            z-index: 9300;
+            transition: transform .12s, opacity .12s;
+        }
+        .adm-macro-fab:hover { transform: translateY(-2px); opacity: .92; }
+        .adm-macro-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.45);
+            z-index: 9350;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .adm-macro-modal {
+            width: min(760px, 96vw);
+            max-height: 90vh;
+            overflow: auto;
+            background: var(--surface);
+            border: 1.5px solid var(--card-border);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 18px 60px rgba(0,0,0,.30);
+        }
+        .adm-macro-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .adm-macro-title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+        .adm-macro-close {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+        .adm-macro-close:hover { color: #e05252; background: rgba(224,82,82,.12); }
+        .adm-macro-sub { margin: 0 0 14px; font-size: 13px; color: var(--text-secondary); }
+        .adm-macro-list { display: grid; gap: 10px; }
+        .adm-macro-item {
+            border: 1.5px solid var(--card-border);
+            border-radius: 12px;
+            padding: 12px;
+            background: var(--bg);
+            display: grid;
+            gap: 8px;
+        }
+        .adm-macro-name { font-size: 14px; font-weight: 700; color: var(--text); }
+        .adm-macro-desc { font-size: 13px; color: var(--text-secondary); }
+        .adm-macro-cmd {
+            margin: 0;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            background: var(--surface);
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .adm-macro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .adm-macro-btn {
+            border: 1.5px solid var(--card-border);
+            background: var(--surface);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .adm-macro-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .adm-macro-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+        .adm-kbd {
+            border: 1px solid var(--card-border);
+            border-bottom-width: 2px;
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-size: 11px;
+            color: var(--text);
+            background: var(--surface);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .adm-macro-toast {
+            position: fixed;
+            right: 22px;
+            bottom: 92px;
+            z-index: 9400;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(18, 22, 28, .94);
+            color: #fff;
+            font-size: 13px;
+            box-shadow: 0 12px 34px rgba(0,0,0,.24);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(6px);
+            transition: opacity .16s, transform .16s;
+        }
+        .adm-macro-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }

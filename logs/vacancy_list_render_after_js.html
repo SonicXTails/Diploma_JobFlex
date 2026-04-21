@@ -1,0 +1,159 @@
+<!doctype html>
+
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Вакансии — Агрегатор</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <script>
+            (function(){
+                try{
+                    var key = 'site_theme';
+                    var saved = localStorage.getItem(key);
+                    if(saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                        document.documentElement.classList.add('theme-dark');
+                    }
+                }catch(e){}
+            })();
+        </script>
+    <link rel="stylesheet" href="/static/vacancies/css/styles.css">
+    <!-- Magic CSS animations (from plugins) -->
+    <link rel="stylesheet" href="/static/vacancies/css/plugins/magic/magic.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <div class="logo-icon">💼</div>
+                <h1>Вакансии</h1>
+            </a>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="filters">
+            <div class="filters-title">Фильтры</div>
+            <form method="get" class="filters-grid">
+                <div class="field full">
+                    <label>Поиск</label>
+                    <input type="text" name="q" value="" placeholder="Название вакансии, ключевые слова...">
+                </div>
+                <div class="field">
+                    <label>Регион</label>
+                    <select name="region">
+                        <option value="">Все регионы</option>
+                        
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Опыт работы</label>
+                    <select name="experience">
+                        <option value="">Любой опыт</option>
+                        
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Работодатель</label>
+                    <input type="text" name="employer" value="" placeholder="Название компании">
+                </div>
+                <div class="field">
+                    <label>Навыки</label>
+                    <input type="text" name="skills" value="" placeholder="python, django, sql">
+                </div>
+                <div class="field">
+                    <label>Зарплата от</label>
+                    <input type="text" name="salary_min" value="" placeholder="50 000">
+                </div>
+                <div class="field">
+                    <label>Зарплата до</label>
+                    <input type="text" name="salary_max" value="" placeholder="150 000">
+                </div>
+                <div class="field">
+                    <label>Сортировка</label>
+                    <select name="sort">
+                        <option value="">По умолчанию</option>
+                        <option value="newest" >Сначала новые</option>
+                        <option value="salary" >По зарплате</option>
+                    </select>
+                </div>
+                <div class="field-inline">
+                    <label class="checkbox">
+                        <input type="checkbox" name="only_with_salary" value="1" >
+                        Только с зарплатой
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="newest" value="1" >
+                        Самые свежие
+                    </label>
+                </div>
+                <div class="field actions">
+                    <button type="submit" class="btn-primary">Найти</button>
+                    <a href="/" class="btn-link">Сбросить</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="results">
+            <div class="results-head">
+                <div>Найдено: <strong>0</strong> вакансий</div>
+                <div class="results-meta">Страница 1 из 1</div>
+            </div>
+
+            <div class="vacancies-grid">
+                
+                    <article class="vacancy-card" tabindex="0" data-employer-id="5490091">
+                        <div class="v-main">
+                            <div class="v-header">
+                                <div class="v-logo">
+                                    
+                                        <img class="company-logo" src="https://img.hhcdn.ru/employer-logo-original-round/7058280.png" alt="Логотип РПК В Движении">
+                                    
+                                </div>
+                                <div class="v-meta">
+                                    <a class="v-title" href="https://hh.ru/vacancy/130767526" target="_blank" rel="noopener">Менеджер по продажам (полиграфия)</a>
+                                    <div class="v-company">РПК В Движении <span class="muted">• Дзержинск (Нижегородская область)</span></div>
+                                            
+                                </div>
+                            </div>
+                            
+                            
+                        </div>
+                        <div class="v-side">
+                            <div class="v-salary">
+                                
+                                    90000
+                                     — 
+                                    150000
+                                    RUR
+                                
+                            </div>
+                            <div class="v-formats">
+                                
+                                    <span class="badge">На месте</span>
+                                
+                            </div>
+                            <div class="v-date" title="25.02.2026 14:25">4 hours, 9 minutes назад</div>
+                            <a class="btn-primary" href="https://hh.ru/vacancy/130767526" target="_blank" rel="noopener">Откликнуться</a>
+                        </div>
+                        <!-- placeholder shown after animation -->
+                        <div class="vacancy-placeholder" aria-hidden="true">
+                            <div class="placeholder-title">Менеджер по продажам (полиграфия)</div>
+                            <div class="placeholder-rating" aria-hidden="true">
+                                <!-- rating will be filled by JS -->
+                            </div>
+                        </div>
+                    </article>
+                
+            </div>
+
+            
+        </section>
+    </main>
+    <script src="/static/vacancies/js/theme.js"></script>
+    <script src="/static/vacancies/js/magic-trigger.js"></script>
+</body>
+</html>
