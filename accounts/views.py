@@ -2181,8 +2181,8 @@ def admin_users(request):
 
 @admin_required
 def admin_profile_page(request):
-    """Personal profile page for an administrator (identity only, no applicant/manager data)."""
-    return render(request, 'accounts/admin_profile.html')
+    """Admin profile page is intentionally disabled; keep admins in control panel."""
+    return redirect('accounts:admin_panel')
 
 
 @admin_required

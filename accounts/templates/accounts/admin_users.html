@@ -10,7 +10,6 @@
 
 {% block header_actions %}
 <a class="btn-link" href="{% url 'accounts:admin_panel' %}">⬅ Панель</a>
-<a class="btn-link" href="{% url 'accounts:admin_profile_page' %}">👤 Профиль</a>
 <a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
 {% endblock %}
 
@@ -89,7 +88,7 @@
             <div class="au-col au-col--full">
                 <div class="au-actions">
                     <button class="au-btn au-btn--save" type="submit" name="action" value="save">Сохранить контакты</button>
-                    <select class="au-input au-role-select" name="new_role">
+                    <select class="au-input au-role-select" name="new_role" data-no-cs>
                         <option value="applicant" {% if row.role == 'applicant' %}selected{% endif %}>Соискатель</option>
                         <option value="manager" {% if row.role == 'manager' %}selected{% endif %}>Менеджер</option>
                         <option value="admin" {% if row.role == 'admin' %}selected{% endif %}>Администратор</option>
@@ -118,4 +117,8 @@
     </div>
     {% endif %}
 </main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'vacancies/js/custom-select.js' %}"></script>
 {% endblock %}
