@@ -24,8 +24,8 @@
                     <div class="field"><label>Имя *</label><input name="first_name" type="text" required placeholder="Иван"></div>
                     <div class="field"><label>Отчество</label><input name="patronymic" type="text" placeholder="Иванович"></div>
                     <div class="field"><label>Логин *</label><input name="username" type="text" required placeholder="manager123"></div>
-                    <div class="field"><label>Почта *</label><input name="email" type="email" required placeholder="ivan@company.ru"></div>
-                    <div class="field"><label>Телеграм *</label><input name="telegram" type="text" required placeholder="@nickname"></div>
+                    <div class="field"><label>Почта</label><input name="email" type="email" placeholder="ivan@company.ru"></div>
+                    <div class="field"><label>Телеграм</label><input name="telegram" type="text" placeholder="@nickname"></div>
                     <div class="field"><label>Компания</label><input name="company" type="text" placeholder="ООО Ромашка"></div>
                     <div class="field"><label>Телефон</label><input name="phone" id="mgr-phone" type="tel" placeholder="+7 (___) ___-__-__"></div>
                     <div class="field"><label>Пароль *</label><input name="password" type="password" required placeholder="Минимум 8 символов"></div>
@@ -163,10 +163,7 @@
         if (username.length < 3 || username.length > 30) { showError('Логин должен быть от 3 до 30 символов.'); return; }
         if (!/^[A-Za-z0-9_.\-]+$/.test(username)) { showError('Логин может содержать только латинские буквы, цифры и символы ._-'); return; }
 
-        if (!email) { showError('Укажите почту.'); return; }
-
-        if (!telegram) { showError('Укажите, пожалуйста, Телеграм.'); return; }
-        if (telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
+        if (telegram && telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
 
         // Password
         if (password !== passConfirm) { showError('Пароли не совпадают.'); return; }

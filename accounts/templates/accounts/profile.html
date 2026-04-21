@@ -783,7 +783,7 @@
             <div class="modal-message">
                 <p>Перед отправкой сообщений необходимо ознакомиться с условиями.</p>
                 <p><a href="{% url 'accounts:message_rules' %}" target="_blank">Ознакомиться с условиями</a></p>
-                <label style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                <label class="checkbox-label" style="margin-top:10px">
                     <input type="checkbox" id="tg-consent-checkbox"> Я ознакомлен и согласен
                 </label>
                 <div id="tg-consent-error" style="color:#b00;margin-top:8px;display:none">Подтвердите соглашение</div>
@@ -801,7 +801,7 @@
             <div class="modal-message">
                 <p>Мы будем отправлять уведомления о вакансиях на ваш Email.</p>
                 <p><a href="{% url 'accounts:message_rules' %}" target="_blank">Ознакомиться с условиями</a></p>
-                <label style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                <label class="checkbox-label" style="margin-top:10px">
                     <input type="checkbox" id="email-consent-checkbox"> Я ознакомлен и согласен
                 </label>
                 <div id="email-consent-error" style="color:#b00;margin-top:8px;display:none">Подтвердите соглашение</div>
@@ -1887,7 +1887,14 @@ document.getElementById('tg-consent-accept').addEventListener('click', function(
                 STATE.user.consent_telegram = true;
                 renderNotifButtons(STATE.user);
                 if (res.body.bot_start_url) { _botStartUrl=res.body.bot_start_url; window.open(res.body.bot_start_url,'_blank'); startWaiting(res.body.bot_start_url); }
-            } else { document.getElementById('tg-consent-error').textContent=res.body.error||'Ошибка'; document.getElementById('tg-consent-error').style.display='block'; }
+            } else {
+                var tgErr = {
+                    no_telegram: 'Сначала укажите Telegram в профиле.',
+                    no_consent: 'Подтвердите согласие на уведомления.',
+                };
+                document.getElementById('tg-consent-error').textContent = tgErr[res.body.error] || res.body.error || 'Ошибка';
+                document.getElementById('tg-consent-error').style.display='block';
+            }
         }).catch(function(){ btn.disabled=false; document.getElementById('tg-consent-error').textContent='Сетевая ошибка'; document.getElementById('tg-consent-error').style.display='block'; });
 });
 
@@ -1931,7 +1938,14 @@ document.getElementById('email-consent-accept').addEventListener('click', functi
         .then(function(res){
             btn.disabled=false;
             if (res.status===200 && res.body.ok) { closeModal(_emailConsentModal); STATE.user.consent_email=true; renderNotifButtons(STATE.user); }
-            else { document.getElementById('email-consent-error').textContent=res.body.error||'Ошибка'; document.getElementById('email-consent-error').style.display='block'; }
+            else {
+                var emailErr = {
+                    no_email: 'Сначала укажите Email в профиле.',
+                    no_consent: 'Подтвердите согласие на уведомления.',
+                };
+                document.getElementById('email-consent-error').textContent = emailErr[res.body.error] || res.body.error || 'Ошибка';
+                document.getElementById('email-consent-error').style.display='block';
+            }
         }).catch(function(){ btn.disabled=false; document.getElementById('email-consent-error').textContent='Сетевая ошибка'; document.getElementById('email-consent-error').style.display='block'; });
 });
 

@@ -608,29 +608,38 @@ details[open] > .adv-summary::before { transform: rotate(90deg); }
 /* ── Animated toggle switch (replaces all native checkboxes) ────────────── */
 input[type="checkbox"] {
   -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
+  display: inline-block;
+  box-sizing: border-box;
   width: 40px;
   height: 22px;
   min-width: 40px;
-  border-radius: 11px;
-  background: var(--card-border);
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+  border-radius: 999px;
+  border: none;
+  background: #cfcfcf;
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.25s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
   vertical-align: middle;
 }
 input[type="checkbox"]::before {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
-  transition: transform 0.25s ease;
+  background: #f3f3f3;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.14);
+  transition: transform 0.2s ease;
 }
 input[type="checkbox"]:checked {
   background: var(--accent);
@@ -643,9 +652,7 @@ input[type="checkbox"]:focus-visible {
   outline-offset: 2px;
 }
 /* keep the toggle thumb white in dark mode too */
-.theme-dark input[type="checkbox"]::before {
-  background: #f0ede8;
-}
+.theme-dark input[type="checkbox"]::before { background: #f0ede8; }
 
 .checkbox input[type="checkbox"] {
   /* inherits toggle styles; no overrides needed */
@@ -1292,10 +1299,7 @@ input[type="checkbox"]:focus-visible {
   line-height: 1.5;
 }
 
-.modal-message input[type="checkbox"] {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
+.modal-message input[type="checkbox"] { flex-shrink: 0; margin-top: 0; }
 
 .modal-actions {
   display: flex;
@@ -1510,7 +1514,8 @@ input[type="checkbox"]:focus-visible {
 }
 .checkbox-label input[type="checkbox"] {
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 0;
+  align-self: center;
 }
 .checkbox-label a { color: var(--accent); text-decoration: none; }
 .checkbox-label a:hover { text-decoration: underline; }
@@ -1571,6 +1576,7 @@ input[type="checkbox"]:focus-visible {
 }
 .reg-section__header input[type="checkbox"] {
   flex-shrink: 0;
+  align-self: center;
 }
 .reg-section__header-label {
   font-size: 15px;
@@ -1678,7 +1684,7 @@ input[type="checkbox"]:focus-visible {
   color: var(--text-secondary);
 }
 .work-current-row input[type="checkbox"] {
-  /* inherits toggle styles */
+  align-self: center;
 }
 
 /* Skills section */

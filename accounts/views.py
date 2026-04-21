@@ -234,12 +234,12 @@ def api_register(request):
     consent_telegram = bool(data.get('consent_telegram'))
     password = data.get('password')
 
-    if not last_name or not first_name or not username or not email or not telegram \
+    if not last_name or not first_name or not username \
             or not phone or not gender or not city or not birth_date_raw \
             or not citizenship or not password:
         return _register_fail('missing_fields')
 
-    if not telegram.startswith('@'):
+    if telegram and not telegram.startswith('@'):
         return _register_fail('invalid_telegram_format')
 
     # Phone: must be Russian format — 11 digits starting with 7 or 8
@@ -274,9 +274,10 @@ def api_register(request):
     if citizenship not in VALID_CITIZENSHIPS:
         return _register_fail('invalid_citizenship')
 
-    if Applicant.objects.filter(telegram__iexact=telegram).exists() or \
-       Manager.objects.filter(telegram__iexact=telegram).exists():
-        return _register_fail('telegram_exists')
+    if telegram:
+        if Applicant.objects.filter(telegram__iexact=telegram).exists() or \
+           Manager.objects.filter(telegram__iexact=telegram).exists():
+            return _register_fail('telegram_exists')
 
     # username uniqueness and format check
     if not username:
@@ -288,8 +289,12 @@ def api_register(request):
     if User.objects.filter(username__iexact=username).exists():
         return _register_fail('username_exists')
 
-    if User.objects.filter(email=email).exists():
+    if email and User.objects.filter(email__iexact=email).exists():
         return _register_fail('email_exists')
+
+    # Contact consents are allowed only when the corresponding contact is present.
+    consent_email = bool(email) and consent_email
+    consent_telegram = bool(telegram) and consent_telegram
 
     user = User.objects.create_user(username=username, email=email, password=password,
                                     first_name=first_name, last_name=last_name)
@@ -401,16 +406,17 @@ def api_register_manager(request):
     phone      = (data.get('phone')      or '').strip()
     password   = data.get('password')
 
-    if not last_name or not first_name or not username or not email or not telegram or not password:
+    if not last_name or not first_name or not username or not password:
         return _register_manager_fail('missing_fields')
 
-    if not telegram.startswith('@'):
+    if telegram and not telegram.startswith('@'):
         return _register_manager_fail('invalid_telegram_format')
 
     # Check telegram uniqueness across both Applicant and Manager
-    if Applicant.objects.filter(telegram__iexact=telegram).exists() or \
-       Manager.objects.filter(telegram__iexact=telegram).exists():
-        return _register_manager_fail('telegram_exists')
+    if telegram:
+        if Applicant.objects.filter(telegram__iexact=telegram).exists() or \
+           Manager.objects.filter(telegram__iexact=telegram).exists():
+            return _register_manager_fail('telegram_exists')
 
     if len(username) < 3 or len(username) > 30:
         return _register_manager_fail('invalid_username')
@@ -418,7 +424,7 @@ def api_register_manager(request):
         return _register_manager_fail('invalid_username_format')
     if User.objects.filter(username__iexact=username).exists():
         return _register_manager_fail('username_exists')
-    if User.objects.filter(email=email).exists():
+    if email and User.objects.filter(email__iexact=email).exists():
         return _register_manager_fail('email_exists')
 
     user = User.objects.create_user(
@@ -3009,6 +3015,8 @@ def api_set_consent(request):
 
     applicant = Applicant.objects.filter(user=request.user).first()
     if applicant:
+        if consent and not (applicant.telegram or '').strip():
+            return JsonResponse({'error': 'no_telegram'}, status=400)
         applicant.consent_telegram = consent
         if not applicant.telegram_start_token:
             applicant.telegram_start_token = uuid.uuid4().hex
@@ -3023,6 +3031,8 @@ def api_set_consent(request):
 
     manager = Manager.objects.filter(user=request.user).first()
     if manager:
+        if consent and not (manager.telegram or '').strip():
+            return JsonResponse({'error': 'no_telegram'}, status=400)
         manager.consent_telegram = consent
         manager.save(update_fields=['consent_telegram'])
         bot_start_url = None
@@ -3106,12 +3116,16 @@ def api_set_email_consent(request):
 
     applicant = Applicant.objects.filter(user=request.user).first()
     if applicant:
+        if consent and not (request.user.email or '').strip():
+            return JsonResponse({'error': 'no_email'}, status=400)
         applicant.consent_email = consent
         applicant.save(update_fields=['consent_email'])
         return JsonResponse({'ok': True, 'consent_email': applicant.consent_email})
 
     manager = Manager.objects.filter(user=request.user).first()
     if manager:
+        if consent and not (request.user.email or '').strip():
+            return JsonResponse({'error': 'no_email'}, status=400)
         manager.consent_email = consent
         manager.save(update_fields=['consent_email'])
         return JsonResponse({'ok': True, 'consent_email': manager.consent_email})

@@ -48,8 +48,8 @@
                     <div class="field"><label>Имя *</label><input name="first_name" type="text" required placeholder="Иван"></div>
                     <div class="field"><label>Отчество</label><input name="patronymic" type="text" placeholder="Иванович"></div>
                     <div class="field"><label>Логин *</label><input name="username" type="text" required placeholder="login123"></div>
-                    <div class="field"><label>Почта *</label><input name="email" type="email" required placeholder="ivan@example.com"></div>
-                    <div class="field"><label>Телеграм *</label><input name="telegram" type="text" required placeholder="@nickname"></div>
+                    <div class="field"><label>Почта</label><input name="email" type="email" placeholder="ivan@example.com"></div>
+                    <div class="field"><label>Телеграм</label><input name="telegram" type="text" placeholder="@nickname"></div>
                     <div class="field"><label>Телефон *</label><input name="phone" id="reg-phone" type="tel" required placeholder="+7 (___) ___-__-__"></div>
 
                     <!-- Gender toggle -->
@@ -632,10 +632,8 @@
         if (username.length < 3 || username.length > 30) { showError('Логин должен быть от 3 до 30 символов.'); return; }
         if (!/^[A-Za-z0-9_.\-]+$/.test(username)) { showError('Логин может содержать только латинские буквы, цифры и символы ._-'); return; }
 
-        // ── Email / Telegram ─────────────────────────
-        if (!email) { showError('Укажите почту.'); return; }
-        if (!telegram) { showError('Укажите Телеграм.'); return; }
-        if (telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
+        // ── Email / Telegram (optional) ──────────────
+        if (telegram && telegram.charAt(0) !== '@') { showError('Телеграм должен начинаться с @'); return; }
 
         // ── Телефон ──────────────────────────────────
         if (!phone) { showError('Укажите номер телефона.'); return; }
