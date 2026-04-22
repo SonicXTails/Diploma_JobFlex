@@ -4,8 +4,10 @@
         .vc-delete-form { margin: 0; margin-left: auto; }
         /* ── Page layout ── */
         .vc-page {
-            width: 100%; margin: 0 auto;
-            padding: 32px 24px 80px;
+            width: 100%;
+            max-width: 1360px;
+            margin: 0 auto;
+            padding: 32px 32px 80px;
             display: grid;
             grid-template-columns: 1fr 240px;
             gap: 0 48px;
@@ -117,6 +119,9 @@
         }
         .sw input:checked ~ .sw-slider { background: var(--accent); }
         .sw input:checked ~ .sw-slider::before { transform: translateX(20px); }
+        .theme-dark .sw-slider { background: #3a312b; }
+        .theme-dark .sw input:checked ~ .sw-slider { background: var(--accent); }
+        .theme-dark .sw-slider::before { background: #f0ede8; }
         .gpc-sub {
             padding: 10px 16px 14px;
             border: 1px solid var(--card-border);
@@ -295,7 +300,7 @@
         }
         .btn-del:hover { background: #dc3545; color: #fff; }
         @media (max-width: 820px) {
-            .vc-page { grid-template-columns: 1fr; }
+            .vc-page { grid-template-columns: 1fr; padding: 24px 16px 64px; }
             .vc-sidebar-col { display: none; }
             .salary-row { grid-template-columns: 1fr 1fr; }
         }
