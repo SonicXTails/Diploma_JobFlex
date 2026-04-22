@@ -3,7 +3,7 @@ from django.db import models
 
 class VacancyQuerySet(models.QuerySet):
 	def visible_for_ru(self):
-		return self.filter(country="Россия")
+		return self.filter(country="Россия").exclude(is_moderator_deleted=True)
 
 
 class Vacancy(models.Model):
@@ -74,6 +74,9 @@ class Vacancy(models.Model):
 		related_name='created_vacancies',
 	)
 	is_active = models.BooleanField(default=True, db_index=True)
+	# Soft-deletion by a moderator: the vacancy is hidden from everyone, but can
+	# be restored by an administrator via the moderator reports panel.
+	is_moderator_deleted = models.BooleanField(default=False, db_index=True)
 
 	# Extended employer-form fields
 	employee_type     = models.CharField('Тип сотрудника', max_length=16, blank=True)  # permanent / temporary
@@ -296,3 +299,171 @@ class VacancyView(models.Model):
 
 	def __str__(self):
 		return f"{self.user_id} viewed {self.vacancy_id}"
+
+
+class VacancyReport(models.Model):
+	"""A user complaint about a site-created vacancy."""
+	REASON_SCAM = 'scam'
+	REASON_SPAM = 'spam'
+	REASON_MISLEADING = 'misleading'
+	REASON_SUSPICIOUS = 'suspicious_conditions'
+	REASON_OTHER = 'other'
+	REASON_CHOICES = [
+		(REASON_SCAM, 'Подозрение на мошенничество'),
+		(REASON_SPAM, 'Спам или реклама'),
+		(REASON_MISLEADING, 'Некорректное описание вакансии'),
+		(REASON_SUSPICIOUS, 'Подозрительные условия работы'),
+		(REASON_OTHER, 'Другое'),
+	]
+
+	SELF_STATUS_NEW = 'new'
+	SELF_STATUS_IN_WORK = 'in_work'
+	SELF_STATUS_DONE = 'done'
+	SELF_STATUS_CHOICES = [
+		(SELF_STATUS_NEW, 'Новая'),
+		(SELF_STATUS_IN_WORK, 'В работе'),
+		(SELF_STATUS_DONE, 'Обработано'),
+	]
+
+	vacancy = models.ForeignKey('Vacancy', on_delete=models.CASCADE, related_name='reports')
+	user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='vacancy_reports')
+	reason_code = models.CharField(max_length=64, choices=REASON_CHOICES)
+	reason_text = models.TextField(blank=True)
+	self_status = models.CharField(max_length=16, choices=SELF_STATUS_CHOICES, default=SELF_STATUS_NEW)
+	moderator_note = models.TextField(blank=True)
+	reviewed_by = models.ForeignKey(
+		'auth.User',
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name='reviewed_vacancy_reports',
+	)
+	reviewed_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ('-created_at',)
+		constraints = [
+			models.UniqueConstraint(fields=['user', 'vacancy'], name='uniq_user_vacancy_report'),
+		]
+		verbose_name = 'Жалоба на вакансию'
+		verbose_name_plural = 'Жалобы на вакансии'
+
+	def __str__(self):
+		return f"Report #{self.pk}: user={self.user_id} vacancy={self.vacancy_id}"
+
+
+class VacancyModerationState(models.Model):
+	"""Moderator's personal review state for a vacancy (card-level, not per report)."""
+	STATUS_NEW = 'new'
+	STATUS_IN_WORK = 'in_work'
+	STATUS_WAITING = 'waiting'
+	STATUS_CHOICES = [
+		(STATUS_NEW, 'Новая'),
+		(STATUS_IN_WORK, 'В работе'),
+		(STATUS_WAITING, 'Ожидание'),
+	]
+
+	vacancy = models.ForeignKey('Vacancy', on_delete=models.CASCADE, related_name='moderation_states')
+	moderator = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='vacancy_moderation_states')
+	status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_NEW)
+	note = models.TextField(blank=True)
+	updated_at = models.DateTimeField(auto_now=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ('-updated_at',)
+		constraints = [
+			models.UniqueConstraint(fields=['vacancy', 'moderator'], name='uniq_vacancy_moderator_state'),
+		]
+		verbose_name = 'Состояние модерации вакансии'
+		verbose_name_plural = 'Состояния модерации вакансий'
+
+	def __str__(self):
+		return f"VacancyState #{self.pk}: vacancy={self.vacancy_id} moderator={self.moderator_id}"
+
+
+def _moderator_deletion_photo_path(instance, filename):
+	return f"moderator_reports/{instance.report_id}/{filename}"
+
+
+class ModeratorDeletionReport(models.Model):
+	"""A record of a vacancy soft-deletion performed by a moderator.
+
+	Snapshot fields preserve essential vacancy information so the report stays
+	readable (and the PDF stays accurate) even if the underlying Vacancy row
+	is later hard-deleted elsewhere.
+	"""
+	vacancy = models.ForeignKey(
+		'Vacancy',
+		on_delete=models.SET_NULL,
+		null=True, blank=True,
+		related_name='moderator_deletions',
+	)
+	moderator = models.ForeignKey(
+		'auth.User',
+		on_delete=models.SET_NULL,
+		null=True, blank=True,
+		related_name='moderator_deletion_reports',
+	)
+	manager = models.ForeignKey(
+		'auth.User',
+		on_delete=models.SET_NULL,
+		null=True, blank=True,
+		related_name='deleted_vacancy_reports',
+		help_text='Менеджер, создавший удалённую вакансию',
+	)
+	reason = models.TextField('Причина удаления')
+
+	# Snapshot fields captured at the moment of deletion.
+	vacancy_title = models.CharField(max_length=255, blank=True)
+	vacancy_company = models.CharField(max_length=255, blank=True)
+	vacancy_description = models.TextField(blank=True)
+	vacancy_external_id = models.CharField(max_length=64, blank=True)
+	manager_full_name = models.CharField(max_length=255, blank=True)
+	manager_email = models.CharField(max_length=255, blank=True)
+	moderator_full_name = models.CharField(max_length=255, blank=True)
+	moderator_email = models.CharField(max_length=255, blank=True)
+	reports_count = models.PositiveIntegerField(default=0)
+	dominant_reason_code = models.CharField(max_length=64, blank=True)
+	dominant_reason_label = models.CharField(max_length=128, blank=True)
+
+	# Restoration bookkeeping.
+	is_restored = models.BooleanField(default=False, db_index=True)
+	restored_by = models.ForeignKey(
+		'auth.User',
+		on_delete=models.SET_NULL,
+		null=True, blank=True,
+		related_name='restored_vacancy_reports',
+	)
+	restored_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ('-created_at',)
+		verbose_name = 'Отчёт об удалении вакансии'
+		verbose_name_plural = 'Отчёты об удалении вакансий'
+
+	def __str__(self):
+		return f"DeletionReport #{self.pk}: '{self.vacancy_title}' by {self.moderator_full_name}"
+
+
+class ModeratorDeletionPhoto(models.Model):
+	"""Photographic evidence attached to a moderator deletion report."""
+	report = models.ForeignKey(
+		ModeratorDeletionReport,
+		on_delete=models.CASCADE,
+		related_name='photos',
+	)
+	image = models.ImageField(upload_to=_moderator_deletion_photo_path)
+	order = models.PositiveSmallIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ('order', 'id')
+		verbose_name = 'Фото-доказательство модератора'
+		verbose_name_plural = 'Фото-доказательства модератора'
+
+	def __str__(self):
+		return f"Photo #{self.pk} for report {self.report_id}"

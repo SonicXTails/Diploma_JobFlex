@@ -1,0 +1,2 @@
+{"sessionId":"d819c5","runId":"initial-debug","hypothesisId":"H9","location":"vacancies/templates/vacancies/vacancy_detail.html:lazyDescInit","message":"Lazy description init","data":{"vacancyPk":10275,"maxPolls":20},"timestamp":1776849432384}
+{"sessionId":"d819c5","runId":"initial-debug","hypothesisId":"H9","location":"vacancies/templates/vacancies/vacancy_detail.html:poll","message":"Description resolved","data":{"vacancyPk":10275,"hasDescription":false,"hasBranded":false},"timestamp":1776849486171}

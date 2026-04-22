@@ -281,6 +281,45 @@
             background: var(--input-bg); color: var(--text); box-sizing: border-box;
         }
         .apply-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+        .report-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .5);
+            z-index: 9000;
+            align-items: center;
+            justify-content: center;
+        }
+        .report-modal {
+            background: var(--surface);
+            border-radius: 14px;
+            padding: 24px;
+            width: 100%;
+            max-width: 680px;
+            box-shadow: 0 8px 40px rgba(0,0,0,.25);
+        }
+        .report-label {
+            display: block;
+            margin-top: 8px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .report-input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1.5px solid var(--card-border);
+            border-radius: 10px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            padding: 10px 12px;
+            font-family: inherit;
+        }
+        .report-input + .report-label { margin-top: 12px; }
+        #report-reason-text {
+            min-height: 110px;
+            resize: vertical;
+        }
 
         /* Employer logo in sidebar */
         .emp-logo-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

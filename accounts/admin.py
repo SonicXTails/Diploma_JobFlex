@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Applicant, Manager, Administrator, ApiActionLog
+from .models import Applicant, Manager, Administrator, Moderator, ApiActionLog
 
 
 @admin.register(Applicant)
@@ -23,6 +23,13 @@ class AdministratorAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Superuser')
     def is_superuser_ok(self, obj):
         return obj.user.is_superuser
+
+
+@admin.register(Moderator)
+class ModeratorAdmin(admin.ModelAdmin):
+    list_display = ('user', 'telegram', 'phone', 'created_at')
+    search_fields = ('user__email', 'user__username', 'user__first_name', 'user__last_name', 'telegram', 'phone')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(ApiActionLog)

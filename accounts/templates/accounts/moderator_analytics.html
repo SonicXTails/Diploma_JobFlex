@@ -1,244 +1,180 @@
+{% extends "base.html" %}
 {% load static %}
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>JobFlex — Панель администратора</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
-    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
-    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
-    <link rel="stylesheet" href="{% static 'vacancies/css/calendar.css' %}">
-    <link rel="stylesheet" href="{% static 'accounts/css/admin-panel.css' %}">
-</head>
-<body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
-<header class="site-header">
-    <div class="container header-inner">
-        <a href="/" class="logo">
-            <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
-            <span class="logo-text">JobFlex</span>
-        </a>
-        <div class="header-actions">
-            <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">🌙</button>
-            <a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
-        </div>
-    </div>
-</header>
 
-<main class="container container--wide adm-page">
+{% block title %}JobFlex - Кабинет модератора{% endblock %}
 
-    <!-- Tabs -->
-    <div class="adm-tabs">
-        <button class="adm-tab-btn active" data-tab="panel">🏠 Панель</button>
-        <button class="adm-tab-btn" data-tab="calendar">📅 Календарь</button>
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vacancies/css/calendar.css' %}">
+<link rel="stylesheet" href="{% static 'accounts/css/moderator-analytics.css' %}">
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
+{% endblock %}
+
+{% block content %}
+<main class="container container--wide mod-page">
+    <h1 class="mod-title">Кабинет модератора</h1>
+    <div class="mod-tabs">
+        <button class="mod-tab is-active" data-tab="reports">Жалобы</button>
+        <button class="mod-tab" data-tab="calendar">Календарь</button>
     </div>
 
-    <!-- Tab: Admin panel -->
-    <div id="adm-tab-panel">
+    <section id="mod-tab-reports">
+        <div class="mod-stats">
+            <div class="mod-stat"><strong>{{ pending_count }}</strong><span>Новые</span></div>
+            <div class="mod-stat"><strong>{{ in_work_count }}</strong><span>В работе</span></div>
+            <div class="mod-stat"><strong>{{ done_count }}</strong><span>Обработано вами</span></div>
+            <div class="mod-stat"><strong>{{ handled_count }}</strong><span>Всего обработали</span></div>
+            <div class="mod-stat"><strong>{% if avg_reaction_minutes %}{{ avg_reaction_minutes }} мин{% else %}—{% endif %}</strong><span>Средняя реакция</span></div>
+        </div>
 
-    <!-- Greeting banner -->
-    <div class="adm-banner">
-        <p class="adm-banner__title">
-            Добро пожаловать,
-            {{ request.user.get_full_name|default:request.user.username }}!
-        </p>
-        <p class="adm-banner__sub">Панель администратора системы JobFlex</p>
-        <div class="adm-badge">
-            🔑 Администратор &nbsp;·&nbsp; Superuser
-        </div>
-    </div>
-
-    <!-- System stats -->
-    <p class="adm-section-title adm-section-title--center">Статистика системы</p>
-    <div class="adm-stats">
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_users }}</div>
-            <div class="adm-stat__label">Всего пользователей</div>
-        </div>
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_applicants }}</div>
-            <div class="adm-stat__label">Соискателей</div>
-        </div>
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_managers }}</div>
-            <div class="adm-stat__label">Менеджеров</div>
-        </div>
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_moderators }}</div>
-            <div class="adm-stat__label">Модераторов</div>
-        </div>
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_vacancies }}</div>
-            <div class="adm-stat__label">Вакансий</div>
-        </div>
-        <div class="adm-stat">
-            <div class="adm-stat__val">{{ stats.total_admins }}</div>
-            <div class="adm-stat__label">Администраторов</div>
-        </div>
-    </div>
-
-    <!-- Quick links -->
-    <p class="adm-section-title">Быстрый доступ</p>
-    <div class="adm-links">
-        <a href="/admin/">🛠 Django Admin</a>
-        <a href="{% url 'accounts:admin_users' %}">👥 Пользователи</a>
-        <a href="{% url 'accounts:admin_moderator_reports' %}">🗂 Отчёты модераторов</a>
-        <a href="/swagger/">📄 Swagger UI</a>
-        <a href="/redoc/">📘 ReDoc</a>
-    </div>
-
-    <!-- Backup management -->
-    <p class="adm-section-title" style="margin-top:32px">🗃 Бэкапы базы данных</p>
-    <div class="adm-backup__toolbar">
-        <button class="adm-btn-primary" id="btn-create-backup" onclick="createBackup()">
-            ⬇️ Создать бэкап сейчас
-        </button>
-        <span id="backup-status"></span>
-    </div>
-    <p class="adm-backup__hint">Автоматически каждый день в 00:00. Хранится не более {{ backups|length|default:0 }} / 3 последних бэкапов.</p>
-
-    {% if backups %}
-    <div class="adm-backup__list">
-        {% for b in backups %}
-        <div class="adm-backup__item">
-            <div class="adm-backup__info">
-                <span class="adm-backup__name" title="{{ b.filename }}">{{ b.filename }}</span>
-                <span class="adm-backup__meta">{{ b.size_kb }} КБ &middot; {{ b.created_str }}</span>
-            </div>
-            <button class="adm-btn-restore"
-                    onclick="restoreBackup('{{ b.filename }}', this)">
-                ♻️ Восстановить
-            </button>
-            <button class="adm-btn-delete"
-                    onclick="deleteBackup('{{ b.filename }}', this)">
-                🗑 Удалить
-            </button>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <p style="font-size:14px;color:var(--text-secondary)">
-        Бэкапов пока нет. Создайте первый вручную или дождитесь автоматического бэкапа в 00:00.
-    </p>
-    {% endif %}
-
-    <div class="adm-audit-wrap">
-        <div class="adm-audit-head">
-            <div>
-                <p class="adm-audit-title">Лог действий API (редкие операции)</p>
-                <p class="adm-audit-sub">История ключевых ручных API-действий: исполнитель, метод, до/после, код ответа.</p>
-            </div>
-        </div>
-        {% if audit_logs %}
-        <div class="adm-audit-scroll">
-            <table class="adm-audit-table">
-                <thead>
-                <tr>
-                    <th>Время</th>
-                    <th>Исполнитель</th>
-                    <th>Метод</th>
-                    <th>Действие</th>
-                    <th>Эндпоинт</th>
-                    <th>Статус</th>
-                    <th>До</th>
-                    <th>После</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for log in audit_logs %}
-                <tr>
-                    <td>{{ log.created_at|date:'d.m.Y H:i:s' }}</td>
-                    <td>
-                        <span class="adm-audit-pill adm-audit-pill--{{ log.actor_role }}">{{ log.actor_label }}</span>
-                        <div style="margin-top:4px;color:var(--text-secondary)">{{ log.username }}</div>
-                    </td>
-                    <td>
-                        <span class="adm-audit-pill adm-audit-method adm-audit-method--{{ log.method|lower }}">{{ log.method }}</span>
-                    </td>
-                    <td>{{ log.action_label }}</td>
-                    <td>
-                        <div class="adm-audit-endpoint">{{ log.endpoint }}</div>
-                    </td>
-                    <td>
-                        {% if log.success %}
-                        <span class="adm-audit-status-ok">Успешно</span>
+        <div class="mod-card">
+            <h2>Ваша продуктивность в диаграммах</h2>
+            <div class="mod-bench">
+                <div class="mod-bench__item">
+                    <span class="mod-bench__label">Место среди модераторов</span>
+                    <strong>#{{ peer_compare.rank }} / {{ peer_compare.total_moderators }}</strong>
+                    <span class="mod-bench__hint">Топ {{ peer_compare.percentile }}%</span>
+                </div>
+                <div class="mod-bench__item">
+                    <span class="mod-bench__label">Обработано vs среднее</span>
+                    <strong>{{ peer_compare.my_handled }} / {{ peer_compare.team_avg_handled }}</strong>
+                    <span class="mod-bench__hint {% if peer_compare.handled_delta_pct >= 0 %}is-better{% else %}is-worse{% endif %}">
+                        {% if peer_compare.handled_delta_pct >= 0 %}+{% endif %}{{ peer_compare.handled_delta_pct }}%
+                    </span>
+                </div>
+                <div class="mod-bench__item">
+                    <span class="mod-bench__label">Скорость реакции vs средняя</span>
+                    <strong>
+                        {% if peer_compare.my_avg_reaction_minutes %}
+                            {{ peer_compare.my_avg_reaction_minutes }} мин / {{ peer_compare.team_avg_reaction_minutes|default:"—" }} мин
                         {% else %}
-                        <span class="adm-audit-status-fail">Ошибка</span>
+                            —
                         {% endif %}
-                        {% if log.status_code %}
-                        <div style="margin-top:3px;color:var(--text-secondary)">HTTP {{ log.status_code }}</div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="adm-audit-toggle" data-audit-target="before-{{ log.id }}">
-                            <button type="button" class="active" data-mode="human">Текст</button>
-                            <button type="button" data-mode="json">JSON</button>
+                    </strong>
+                    <span class="mod-bench__hint {% if peer_compare.reaction_delta_pct >= 0 %}is-better{% else %}is-worse{% endif %}">
+                        {% if peer_compare.reaction_delta_pct >= 0 %}+{% endif %}{{ peer_compare.reaction_delta_pct }}%
+                    </span>
+                </div>
+            </div>
+            <div class="mod-charts-grid">
+                <div class="mod-chart-card">
+                    <h3>Ваши статусы обработки</h3>
+                    <div id="mod-chart-status" class="mod-chart-donut"></div>
+                </div>
+                <div class="mod-chart-card">
+                    <h3>Динамика за 6 месяцев</h3>
+                    <div id="mod-chart-history" class="mod-chart-bars"></div>
+                </div>
+                <div class="mod-chart-card">
+                    <h3>Причины жалоб (по системе)</h3>
+                    <div id="mod-chart-reasons" class="mod-chart-hbars"></div>
+                </div>
+                <div class="mod-chart-card">
+                    <h3>Сравнение с другими модераторами</h3>
+                    <div id="mod-chart-peer" class="mod-chart-bars"></div>
+                </div>
+            </div>
+        </div>
+        <script id="mod-metrics-json" type="application/json">{{ moderator_metrics_json|safe }}</script>
+
+        <div class="mod-card">
+            <h2>Лента жалоб</h2>
+            <form method="get" class="mod-filter-bar">
+                <label for="review-status-filter">Статус рассмотрения:</label>
+                <select id="review-status-filter" class="mod-input" name="review_status">
+                    <option value="">Все</option>
+                    {% for val, lbl in review_status_choices %}
+                    <option value="{{ val }}" {% if selected_review_status == val %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn" type="submit">Применить</button>
+            </form>
+            {% if vacancy_cards %}
+                {% for card in vacancy_cards %}
+                <div class="mod-vacancy-card">
+                    <div class="mod-report-head">
+                        <div>
+                            <strong>{{ card.vacancy_title }}</strong>
+                            <div class="mod-muted">{{ card.vacancy_company }} · {{ card.last_report_at|date:"d.m.Y H:i" }}</div>
                         </div>
-                        <pre id="before-{{ log.id }}-human" class="adm-audit-payload adm-audit-payload--human">{{ log.before_human }}</pre>
-                        <pre id="before-{{ log.id }}-json" class="adm-audit-payload adm-audit-payload--json">{{ log.before_json }}</pre>
-                    </td>
-                    <td>
-                        <div class="adm-audit-toggle" data-audit-target="after-{{ log.id }}">
-                            <button type="button" class="active" data-mode="human">Текст</button>
-                            <button type="button" data-mode="json">JSON</button>
+                        <button class="mod-btn-open js-vacancy-expand" type="button" data-target="vacancy-detail-{{ card.vacancy_id }}">
+                            Подробнее
+                        </button>
+                    </div>
+                    <div class="mod-vacancy-meta">
+                        <span class="mod-pill">Жалоб: <b>{{ card.reports_total }}</b></span>
+                        <span class="mod-pill">Статус: <b class="js-card-status-label">{{ card.summary_status_label }}</b></span>
+                        <span class="mod-pill">Личная заметка: <b class="js-card-note-label">{{ card.summary_note|default:"—" }}</b></span>
+                        <span class="mod-pill">Тег жалоб: <b>{{ card.dominant_reason }}</b></span>
+                    </div>
+                    <div class="mod-vacancy-detail" id="vacancy-detail-{{ card.vacancy_id }}" style="display:none">
+                        <div class="mod-vacancy-detail-head">
+                            <h3>Подробно по жалобам</h3>
+                            <div class="mod-vacancy-detail-actions">
+                                <a class="mod-btn-open" href="{% url 'vacancy-detail' card.vacancy_external_id %}" target="_blank" rel="noopener">Открыть вакансию</a>
+                                <button class="mod-btn-danger js-open-delete-modal"
+                                        type="button"
+                                        data-vacancy-id="{{ card.vacancy_id }}"
+                                        data-vacancy-title="{{ card.vacancy_title }}"
+                                        data-vacancy-company="{{ card.vacancy_company }}">
+                                    🗑 Удалить вакансию
+                                </button>
+                            </div>
                         </div>
-                        <pre id="after-{{ log.id }}-human" class="adm-audit-payload adm-audit-payload--human">{{ log.after_human }}</pre>
-                        <pre id="after-{{ log.id }}-json" class="adm-audit-payload adm-audit-payload--json">{{ log.after_json }}</pre>
-                    </td>
-                </tr>
+                        <div class="mod-card-state">
+                            <select class="mod-input js-vacancy-status" data-vacancy-id="{{ card.vacancy_id }}">
+                                {% for val, lbl in review_status_choices %}
+                                <option value="{{ val }}" {% if card.summary_status == val %}selected{% endif %}>{{ lbl }}</option>
+                                {% endfor %}
+                            </select>
+                            <textarea class="mod-input mod-card-note js-vacancy-note" data-vacancy-id="{{ card.vacancy_id }}" placeholder="Личная заметка по этой вакансии">{{ card.summary_note }}</textarea>
+                            <button class="btn js-vacancy-save" type="button" data-vacancy-id="{{ card.vacancy_id }}">Сохранить карточку</button>
+                        </div>
+                        <div class="mod-compact-list">
+                            {% for report in card.reports %}
+                            <div class="mod-compact-item">
+                                <div class="mod-compact-item__head">
+                                    <div class="mod-comment-author">
+                                        {% if report.avatar_url %}
+                                        <img class="mod-comment-avatar" src="{{ report.avatar_url }}" alt="{{ report.reporter_name }}">
+                                        {% else %}
+                                        <span class="mod-comment-avatar mod-comment-avatar--fallback">{{ report.avatar_letter }}</span>
+                                        {% endif %}
+                                        <span class="mod-muted">{{ report.reporter_name }}</span>
+                                    </div>
+                                    <span class="mod-muted">{{ report.created_at|date:"d.m.Y H:i" }}</span>
+                                </div>
+                                <div class="mod-reason">{{ report.reason_label }}</div>
+                                {% if report.reason_text %}<p class="mod-compact-text">{{ report.reason_text }}</p>{% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
                 {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% if logs_page_obj %}
-        <div class="adm-audit-pager">
-            {% if logs_page_obj.has_previous %}
-            <a class="adm-audit-page-link" href="?log_page={{ logs_page_obj.previous_page_number }}">← Назад</a>
+                <div class="mod-pager">
+                    {% if vacancy_page_obj.has_previous %}
+                    <a href="?vacancy_page={{ vacancy_page_obj.previous_page_number }}{% if selected_review_status %}&review_status={{ selected_review_status }}{% endif %}">← Назад</a>
+                    {% endif %}
+                    <span>Страница {{ vacancy_page_obj.number }} из {{ vacancy_page_obj.paginator.num_pages }}</span>
+                    {% if vacancy_page_obj.has_next %}
+                    <a href="?vacancy_page={{ vacancy_page_obj.next_page_number }}{% if selected_review_status %}&review_status={{ selected_review_status }}{% endif %}">Вперёд →</a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="mod-empty">Жалоб пока нет.</p>
             {% endif %}
-            <span class="adm-audit-page-num">Страница {{ logs_page_obj.number }} из {{ logs_page_obj.paginator.num_pages }}</span>
-            {% if logs_page_obj.has_next %}
-            <a class="adm-audit-page-link" href="?log_page={{ logs_page_obj.next_page_number }}">Вперед →</a>
-            {% endif %}
         </div>
-        {% endif %}
-        {% else %}
-        <p style="margin:0;padding:14px;font-size:13px;color:var(--text-secondary)">Логи пока пустые. Выполните действие через API, чтобы запись появилась здесь.</p>
-        {% endif %}
-    </div>
+    </section>
 
-    <!-- Fallback instructions if web restore fails -->
-    <details style="margin-top:18px">
-        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text-secondary);user-select:none">
-            ⚠️ Что делать, если кнопка «Восстановить» не работает?
-        </summary>
-        <div style="margin-top:12px;padding:16px 18px;background:var(--surface);border:1.5px solid var(--card-border);border-radius:12px;font-size:13px;color:var(--text);line-height:1.7">
-            <p style="margin:0 0 10px;font-weight:600">Ручное восстановление через командную строку:</p>
-            <ol style="margin:0 0 12px;padding-left:20px">
-                <li>Остановите сервер Django (<code>Ctrl+C</code>).</li>
-                <li>Откройте терминал в папке проекта.</li>
-                <li>Выполните команду, указав имя файла из папки <code>backups/</code>:</li>
-            </ol>
-            <pre style="background:var(--bg);border:1px solid var(--card-border);border-radius:8px;padding:10px 14px;overflow-x:auto;margin:0 0 12px;font-size:12px">python manage.py restore_db db_backup_YYYYMMDD_HHMMSS.sqlite3</pre>
-            <p style="margin:0 0 6px">Например (самый свежий бэкап):</p>
-            <pre style="background:var(--bg);border:1px solid var(--card-border);border-radius:8px;padding:10px 14px;overflow-x:auto;margin:0 0 12px;font-size:12px">{% if backups %}python manage.py restore_db {{ backups.0.filename }}{% else %}python manage.py restore_db &lt;имя_файла&gt;.sqlite3{% endif %}</pre>
-            <p style="margin:0 0 6px">Все файлы бэкапов находятся в папке проекта:</p>
-            <pre style="background:var(--bg);border:1px solid var(--card-border);border-radius:8px;padding:10px 14px;overflow-x:auto;margin:0;font-size:12px">backups/</pre>
-            <p style="margin:12px 0 0;color:var(--text-secondary)">
-                Команда автоматически сохраняет страховую копию текущей базы перед заменой
-                (файл <code>before_restore_*.sqlite3</code> в той же папке). После восстановления
-                перезапустите сервер Django.
-            </p>
-        </div>
-    </details>
-
-    </div><!-- /#adm-tab-panel -->
-
-    <!-- Tab: Calendar -->
-    <div id="adm-tab-calendar" style="display:none">
+    <!-- ═══════════════════════════════════════════════════════════════════
+         CALENDAR TAB — identical structure/features to the administrator
+         (month grid + fullscreen modal with month/week views, note modal).
+    ═══════════════════════════════════════════════════════════════════ -->
+    <section id="mod-tab-calendar" style="display:none">
         <div class="cal-layout">
-            <!-- Left: month grid -->
             <div class="cal-main">
                 <div class="cal-header">
                     <button class="cal-nav" id="cal-prev" aria-label="Предыдущий месяц">&#8249;</button>
@@ -255,7 +191,6 @@
                 </div>
                 <div class="cal-grid cal-days" id="cal-days"></div>
             </div>
-            <!-- Right: day schedule -->
             <div class="cal-detail" id="cal-detail">
                 <div class="cal-detail__header">
                     <span class="cal-detail__date" id="cal-detail-date">Выберите день</span>
@@ -272,11 +207,9 @@
             <div class="cal-day-tl__title" id="cal-day-tl-title"></div>
             <div class="cal-day-tl__body" id="cal-day-tl-body"></div>
         </div>
-    </div><!-- /#adm-tab-calendar -->
+    </section>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         FULLSCREEN CALENDAR MODAL
-    ══════════════════════════════════════════════════════════════ -->
+    <!-- Fullscreen calendar modal -->
     <div id="cal-fs-overlay" class="cal-fs-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Расширенный календарь">
       <div class="cal-fs-panel">
         <div class="cal-fs-toolbar">
@@ -336,13 +269,41 @@
               </div>
             </div>
           </div>
-        </div><!-- /.cal-fs-body -->
-      </div><!-- /.cal-fs-panel -->
-    </div><!-- /#cal-fs-overlay -->
+        </div>
+      </div>
+    </div>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         NOTE MODAL
-    ══════════════════════════════════════════════════════════════ -->
+    <!-- Vacancy deletion modal (moderator action) -->
+    <div id="mod-del-overlay" class="mod-del-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="mod-del-title">
+        <div class="mod-del-panel">
+            <button class="mod-del-close" id="mod-del-close" aria-label="Закрыть">✕</button>
+            <h2 id="mod-del-title" class="mod-del-panel__title">Удаление вакансии</h2>
+            <p class="mod-muted" id="mod-del-subtitle">—</p>
+            <div class="mod-del-field">
+                <label for="mod-del-reason">Причина удаления <span style="color:#c9375a">*</span></label>
+                <textarea id="mod-del-reason" class="mod-input" rows="12"
+                          placeholder="Например: вакансия содержит признаки мошенничества, пользователь просит «делать заказы» и т. п."></textarea>
+            </div>
+            <div class="mod-del-field">
+                <label>Фото-доказательства (до {{ 8 }} шт., до 8&nbsp;МБ каждое)</label>
+                <div id="mod-del-dropzone" class="mod-del-dropzone" tabindex="0">
+                    <div class="mod-del-dropzone__hint">
+                        <b>Перетащите скриншоты сюда,</b> или нажмите Ctrl+V, чтобы вставить из буфера,<br>
+                        либо нажмите кнопку ниже, чтобы выбрать файлы.
+                    </div>
+                    <button type="button" class="btn mod-btn-outline" id="mod-del-pick">Выбрать файлы</button>
+                    <input type="file" id="mod-del-file-input" accept="image/*" multiple hidden>
+                </div>
+                <div id="mod-del-preview" class="mod-del-preview"></div>
+            </div>
+            <div class="mod-del-footer">
+                <button type="button" class="btn btn--ghost" id="mod-del-cancel">Отмена</button>
+                <button type="button" class="btn mod-btn-danger" id="mod-del-submit">Удалить вакансию</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note modal (create/edit, full palette support) -->
     <div id="note-modal-overlay" class="note-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Заметка">
       <div class="note-modal" id="note-modal">
         <p class="note-modal__title" id="note-modal-heading">Новая заметка</p>
@@ -385,220 +346,313 @@
         </div>
       </div>
     </div>
-
-        <button id="adm-macro-fab" class="adm-macro-fab" title="Макросы быстрых действий" aria-label="Макросы">?</button>
-
-        <div id="adm-macro-overlay" class="adm-macro-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Макросы администратора">
-            <div class="adm-macro-modal">
-                <div class="adm-macro-head">
-                    <h3 class="adm-macro-title">Макросы быстрых действий</h3>
-                    <button id="adm-macro-close" class="adm-macro-close" aria-label="Закрыть">×</button>
-                </div>
-                <p class="adm-macro-sub">Каждый макрос показывает: что делает действие и какую команду выполнить.</p>
-                <div class="adm-macro-list">
-                    <div class="adm-macro-item">
-                        <div class="adm-macro-name">1. Полный сброс dev-базы + админ</div>
-                        <div class="adm-macro-desc">Удаляет локальную БД, прогоняет миграции и очищает данные. После flush автоматически создаётся админ aedgy.</div>
-                        <pre class="adm-macro-cmd" id="macro-cmd-reset">del db.sqlite3
-python manage.py migrate
-python manage.py flush --noinput</pre>
-                        <div class="adm-macro-actions">
-                            <button class="adm-macro-btn" data-copy-target="macro-cmd-reset">Скопировать команду</button>
-                        </div>
-                    </div>
-
-                    <div class="adm-macro-item">
-                        <div class="adm-macro-name">2. Быстрое обновление вакансий</div>
-                        <div class="adm-macro-desc">Запускает синхронизацию вакансий HH вручную.</div>
-                        <pre class="adm-macro-cmd" id="macro-cmd-sync">python manage.py fetch_hh --pages 1</pre>
-                        <div class="adm-macro-actions">
-                            <button class="adm-macro-btn" data-copy-target="macro-cmd-sync">Скопировать команду</button>
-                        </div>
-                    </div>
-
-                    <div class="adm-macro-item">
-                        <div class="adm-macro-name">3. Открыть сервисные панели</div>
-                        <div class="adm-macro-desc">Переход выполняется через горячие клавиши, без кнопок в модалке.</div>
-                        <div class="adm-macro-hint">
-                            <span class="adm-kbd">F8</span> открыть/закрыть макросы
-                            <span class="adm-kbd">Ё</span>/<span class="adm-kbd">`</span> тоже открывает макросы
-                            <span class="adm-kbd">1</span> скопировать «сброс dev-базы»
-                            <span class="adm-kbd">2</span> скопировать «обновление вакансий»
-                            <span class="adm-kbd">3</span> открыть Django Admin
-                            <span class="adm-kbd">4</span> открыть Swagger
-                            <span class="adm-kbd">5</span> открыть ReDoc
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div id="adm-macro-toast" class="adm-macro-toast" aria-live="polite"></div>
-
 </main>
+{% endblock %}
 
-<script src="{% static 'vacancies/js/theme.js' %}"></script>
-<script src="{% static 'vacancies/js/macros.js' %}"></script>
-
+{% block extra_scripts %}
 <script>
-function _csrfToken() {
-    var m = document.cookie.match(/csrftoken=([^;]+)/);
-    return m ? m[1] : '';
-}
-
-function createBackup() {
-    var btn    = document.getElementById('btn-create-backup');
-    var status = document.getElementById('backup-status');
-    btn.disabled   = true;
-    status.textContent = 'Создаём бэкап…';
-    fetch('{% url "accounts:api_admin_backup_create" %}', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': _csrfToken() },
-    }).then(function(r){ return r.json(); }).then(function(d) {
-        if (d.ok) {
-            status.textContent = '✅ Бэкап создан: ' + d.filename + ' (' + d.size_kb + ' КБ)';
-            setTimeout(function(){ window.location.reload(); }, 1200);
-        } else {
-            status.textContent = '❌ Ошибка: ' + (d.error || 'неизвестная');
-            btn.disabled = false;
-        }
-    }).catch(function() {
-        status.textContent = '❌ Ошибка сети';
-        btn.disabled = false;
-    });
-}
-
-function restoreBackup(filename, btn) {
-    if (!confirm(
-        'Восстановить базу данных из «' + filename + '»?\n\n'
-        + 'Текущие данные будут заменены. '
-        + 'Автоматическая страховая копия будет сохранена в backups/.'
-    )) return;
-    btn.disabled    = true;
-    btn.textContent = '…';
-    fetch('{% url "accounts:api_admin_backup_restore" %}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfToken() },
-        body: JSON.stringify({ filename: filename }),
-    }).then(function(r){ return r.json(); }).then(function(d) {
-        if (d.ok) {
-            alert('✅ База данных восстановлена из «' + filename + '».\nСтраница будет перезагружена.');
-            window.location.reload();
-        } else {
-            alert('❌ Ошибка: ' + (d.error || 'неизвестная'));
-            btn.disabled    = false;
-            btn.textContent = '\u267b\ufe0f Восстановить';
-        }
-    }).catch(function() {
-        alert('❌ Ошибка сети');
-        btn.disabled    = false;
-        btn.textContent = '\u267b\ufe0f Восстановить';
-    });
-}
-
-function deleteBackup(filename, btn) {
-    if (!confirm('Удалить бэкап «' + filename + '»?\nЭто действие необратимо.')) return;
-    btn.disabled    = true;
-    btn.textContent = '…';
-    fetch('{% url "accounts:api_admin_backup_delete" %}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfToken() },
-        body: JSON.stringify({ filename: filename }),
-    }).then(function(r){ return r.json(); }).then(function(d) {
-        if (d.ok) {
-            // Remove the row from the DOM without full reload
-            var item = btn.closest('.adm-backup__item');
-            if (item) item.remove();
-        } else {
-            alert('❌ Ошибка: ' + (d.error || 'неизвестная'));
-            btn.disabled    = false;
-            btn.textContent = '\ud83d\uddd1 Удалить';
-        }
-    }).catch(function() {
-        alert('❌ Ошибка сети');
-        btn.disabled    = false;
-        btn.textContent = '\ud83d\uddd1 Удалить';
-    });
-}
-
-function initAuditLogToggles() {
-    document.querySelectorAll('.adm-audit-toggle').forEach(function(toggle) {
-        toggle.addEventListener('click', function(e) {
-            var btn = e.target.closest('button[data-mode]');
-            if (!btn) return;
-            var mode = btn.getAttribute('data-mode');
-            var target = toggle.getAttribute('data-audit-target');
-            if (!target) return;
-            var humanEl = document.getElementById(target + '-human');
-            var jsonEl = document.getElementById(target + '-json');
-            if (!humanEl || !jsonEl) return;
-
-            toggle.querySelectorAll('button').forEach(function(b) {
-                b.classList.toggle('active', b === btn);
-            });
-            if (mode === 'json') {
-                humanEl.style.display = 'none';
-                jsonEl.style.display = 'block';
-            } else {
-                humanEl.style.display = 'block';
-                jsonEl.style.display = 'none';
-            }
-        });
-    });
-}
-initAuditLogToggles();
-
-function animateAdminStats() {
-    var nodes = document.querySelectorAll('.adm-stat__val');
-    var durationMs = 850; // smooth but still quick
-    nodes.forEach(function(node) {
-        var target = parseInt((node.textContent || '0').replace(/\s+/g, ''), 10);
-        if (!isFinite(target) || target < 0) return;
-        if (target === 0) {
-            node.textContent = '0';
-            return;
-        }
-        var startTs = null;
-        function step(ts) {
-            if (startTs === null) startTs = ts;
-            var t = Math.min((ts - startTs) / durationMs, 1);
-            var eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
-            var value = Math.floor(target * eased);
-            node.textContent = String(value);
-            if (t < 1) {
-                requestAnimationFrame(step);
-            } else {
-                node.textContent = String(target);
-            }
-        }
-        node.textContent = '0';
-        requestAnimationFrame(step);
-    });
-}
-animateAdminStats();
-
 /* ════════════════════════════════════════════════════════
-   Admin tab switching
+   Moderator page: tab switcher + reports inline actions
 ════════════════════════════════════════════════════════ */
 (function(){
-    var tabs = document.querySelectorAll('.adm-tab-btn');
-    var panels = {
-        panel:    document.getElementById('adm-tab-panel'),
-        calendar: document.getElementById('adm-tab-calendar'),
-    };
+    var tabs = document.querySelectorAll('.mod-tab');
+    function switchTab(tab){
+        tabs.forEach(function(btn){ btn.classList.toggle('is-active', btn.getAttribute('data-tab') === tab); });
+        document.getElementById('mod-tab-reports').style.display = tab === 'reports' ? '' : 'none';
+        document.getElementById('mod-tab-calendar').style.display = tab === 'calendar' ? '' : 'none';
+        if (tab === 'calendar' && window.calRender) window.calRender();
+    }
     tabs.forEach(function(btn){
+        btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+    });
+    document.querySelectorAll('.js-vacancy-expand').forEach(function(btn){
         btn.addEventListener('click', function(){
-            var target = btn.getAttribute('data-tab');
-            tabs.forEach(function(b){ b.classList.toggle('active', b === btn); });
-            Object.keys(panels).forEach(function(k){
-                panels[k].style.display = k === target ? '' : 'none';
+            var targetId = btn.getAttribute('data-target');
+            var box = targetId ? document.getElementById(targetId) : null;
+            if (!box) return;
+            var willOpen = box.style.display === 'none';
+            box.style.display = willOpen ? '' : 'none';
+            btn.textContent = willOpen ? 'Скрыть' : 'Подробнее';
+        });
+    });
+
+    function renderBars(container, labels, values, opts){
+        if (!container) return;
+        var maxV = Math.max.apply(null, values.concat([1]));
+        container.innerHTML = labels.map(function(label, i){
+            var value = values[i] || 0;
+            var width = Math.max(8, Math.round((value / maxV) * 100));
+            var isMe = opts && opts.currentIndex === i;
+            return '<div class="mod-bar-row'+(isMe ? ' is-me' : '')+'">'
+                + '<span class="mod-bar-label">' + label + '</span>'
+                + '<div class="mod-bar-track"><div class="mod-bar-fill" style="width:' + width + '%"></div></div>'
+                + '<span class="mod-bar-val">' + value + '</span>'
+                + '</div>';
+        }).join('');
+    }
+
+    function renderHBars(container, labels, values){
+        if (!container) return;
+        var maxV = Math.max.apply(null, values.concat([1]));
+        container.innerHTML = labels.map(function(label, i){
+            var value = values[i] || 0;
+            var width = Math.max(10, Math.round((value / maxV) * 100));
+            return '<div class="mod-hbar-row">'
+                + '<span class="mod-hbar-label">' + label + '</span>'
+                + '<div class="mod-hbar-track"><div class="mod-hbar-fill" style="width:' + width + '%"></div></div>'
+                + '<span class="mod-hbar-val">' + value + '</span>'
+                + '</div>';
+        }).join('');
+    }
+
+    function renderDonut(container, labels, values){
+        if (!container) return;
+        var total = values.reduce(function(acc, v){ return acc + (v || 0); }, 0);
+        var colors = ['#5b8def', '#f5a623', '#2fbf71'];
+        if (!total){
+            container.innerHTML = '<p class="mod-empty">Пока нет данных для вашей диаграммы.</p>';
+            return;
+        }
+        var angle = 0;
+        var parts = values.map(function(v, idx){
+            var portion = ((v || 0) / total) * 360;
+            var from = angle;
+            angle += portion;
+            return colors[idx % colors.length] + ' ' + from.toFixed(2) + 'deg ' + angle.toFixed(2) + 'deg';
+        });
+        var legend = labels.map(function(label, idx){
+            return '<li><span class="mod-dot" style="background:'+colors[idx % colors.length]+'"></span>'
+                + label + ' — <b>' + (values[idx] || 0) + '</b></li>';
+        }).join('');
+        container.innerHTML = '<div class="mod-donut" style="background:conic-gradient(' + parts.join(',') + ')">'
+            + '<span>' + total + '</span></div><ul class="mod-donut-legend">' + legend + '</ul>';
+    }
+
+    function renderMetricsCharts(){
+        var raw = document.getElementById('mod-metrics-json');
+        if (!raw) return;
+        var data = {};
+        try { data = JSON.parse(raw.textContent || '{}'); } catch (e) { data = {}; }
+
+        renderDonut(
+            document.getElementById('mod-chart-status'),
+            (data.status && data.status.labels) || [],
+            (data.status && data.status.values) || []
+        );
+        renderBars(
+            document.getElementById('mod-chart-history'),
+            (data.history && data.history.labels) || [],
+            (data.history && data.history.values) || []
+        );
+        renderHBars(
+            document.getElementById('mod-chart-reasons'),
+            (data.reasons && data.reasons.labels) || [],
+            (data.reasons && data.reasons.values) || []
+        );
+        var peer = data.peer || {};
+        var myId = (peer.current_user_id || null);
+        var ids = peer.ids || [];
+        var myIndex = ids.indexOf(myId);
+        renderBars(
+            document.getElementById('mod-chart-peer'),
+            peer.labels || [],
+            peer.values || [],
+            {currentIndex: myIndex}
+        );
+    }
+    renderMetricsCharts();
+
+    function _csrf(){ var m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+
+    /* ────── Vacancy deletion modal (photo upload + clipboard paste) ────── */
+    var MAX_PHOTOS = 8;
+    var MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+    var delOverlay   = document.getElementById('mod-del-overlay');
+    var delTitle     = document.getElementById('mod-del-title');
+    var delSubtitle  = document.getElementById('mod-del-subtitle');
+    var delReason    = document.getElementById('mod-del-reason');
+    var delPreview   = document.getElementById('mod-del-preview');
+    var delDropzone  = document.getElementById('mod-del-dropzone');
+    var delFileInput = document.getElementById('mod-del-file-input');
+    var delPickBtn   = document.getElementById('mod-del-pick');
+    var delCancel    = document.getElementById('mod-del-cancel');
+    var delSubmit    = document.getElementById('mod-del-submit');
+    var delCloseBtn  = document.getElementById('mod-del-close');
+    var delVacancyId = null;
+    var delPhotos    = []; // each item: {blob, name, preview, kind: 'file'|'paste'}
+
+    function openDelModal(vacancyId, title, company){
+        delVacancyId = vacancyId;
+        delReason.value = '';
+        delPhotos = [];
+        renderDelPreview();
+        delTitle.textContent = 'Удаление вакансии';
+        delSubtitle.textContent = title + (company ? ' · ' + company : '');
+        delOverlay.style.display = 'flex';
+        setTimeout(function(){ delReason.focus(); }, 40);
+    }
+    function closeDelModal(){
+        delOverlay.style.display = 'none';
+        delVacancyId = null;
+        delPhotos.forEach(function(p){ if (p.preview) URL.revokeObjectURL(p.preview); });
+        delPhotos = [];
+    }
+    function renderDelPreview(){
+        if (!delPhotos.length){ delPreview.innerHTML = '<span class="mod-muted">Без фото</span>'; return; }
+        delPreview.innerHTML = delPhotos.map(function(p, i){
+            return '<div class="mod-del-thumb">'
+                + '<img src="'+p.preview+'" alt="evidence">'
+                + '<button type="button" class="mod-del-thumb__rm" data-idx="'+i+'" title="Удалить">✕</button>'
+                + '<span class="mod-del-thumb__tag">'+(p.kind === 'paste' ? '📋' : '📷')+'</span>'
+                + '</div>';
+        }).join('');
+        delPreview.querySelectorAll('.mod-del-thumb__rm').forEach(function(rm){
+            rm.addEventListener('click', function(){
+                var idx = +rm.getAttribute('data-idx');
+                if (!isNaN(idx) && delPhotos[idx]){
+                    URL.revokeObjectURL(delPhotos[idx].preview);
+                    delPhotos.splice(idx, 1);
+                    renderDelPreview();
+                }
             });
-            if(target === 'calendar') window.calRender && window.calRender();
+        });
+    }
+    function addDelPhoto(blob, kind){
+        if (delPhotos.length >= MAX_PHOTOS){ alert('Максимум '+MAX_PHOTOS+' фото.'); return; }
+        if (!blob || !/^image\//.test(blob.type || '')){ alert('Можно прикладывать только изображения.'); return; }
+        if (blob.size && blob.size > MAX_PHOTO_BYTES){ alert('Файл слишком большой (до 8 МБ).'); return; }
+        delPhotos.push({
+            blob: blob,
+            name: blob.name || ('clipboard-' + Date.now() + '.png'),
+            preview: URL.createObjectURL(blob),
+            kind: kind || 'file',
+        });
+        renderDelPreview();
+    }
+    document.querySelectorAll('.js-open-delete-modal').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            openDelModal(
+                btn.getAttribute('data-vacancy-id'),
+                btn.getAttribute('data-vacancy-title') || '',
+                btn.getAttribute('data-vacancy-company') || ''
+            );
+        });
+    });
+    if (delPickBtn) delPickBtn.addEventListener('click', function(){ delFileInput.click(); });
+    if (delFileInput) delFileInput.addEventListener('change', function(){
+        Array.prototype.forEach.call(delFileInput.files || [], function(f){ addDelPhoto(f, 'file'); });
+        delFileInput.value = '';
+    });
+    if (delDropzone){
+        delDropzone.addEventListener('dragover', function(e){ e.preventDefault(); delDropzone.classList.add('is-over'); });
+        delDropzone.addEventListener('dragleave', function(){ delDropzone.classList.remove('is-over'); });
+        delDropzone.addEventListener('drop', function(e){
+            e.preventDefault();
+            delDropzone.classList.remove('is-over');
+            Array.prototype.forEach.call((e.dataTransfer && e.dataTransfer.files) || [], function(f){ addDelPhoto(f, 'file'); });
+        });
+    }
+    // Paste from clipboard (Ctrl+V) — listen globally while modal is open.
+    document.addEventListener('paste', function(e){
+        if (delOverlay.style.display === 'none') return;
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        var added = 0;
+        for (var i = 0; i < items.length; i++){
+            var it = items[i];
+            if (it.kind === 'file' && /^image\//.test(it.type)){
+                var blob = it.getAsFile();
+                if (blob){ addDelPhoto(blob, 'paste'); added++; }
+            }
+        }
+        if (added) e.preventDefault();
+    });
+    if (delCancel)   delCancel.addEventListener('click', closeDelModal);
+    if (delCloseBtn) delCloseBtn.addEventListener('click', closeDelModal);
+    if (delOverlay)  delOverlay.addEventListener('click', function(e){ if (e.target === delOverlay) closeDelModal(); });
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && delOverlay.style.display !== 'none') closeDelModal();
+    });
+    if (delSubmit) delSubmit.addEventListener('click', function(){
+        var reason = delReason.value.trim();
+        if (!reason){ alert('Укажите причину удаления.'); delReason.focus(); return; }
+        if (!delVacancyId) return;
+        var fd = new FormData();
+        fd.append('reason', reason);
+        delPhotos.forEach(function(p){
+            if (p.kind === 'file'){
+                fd.append('photos', p.blob, p.name);
+            } else {
+                // Clipboard paste: send as base64 payload; small detour via FileReader.
+                // (We use file append + appended b64 to keep this backend-compatible.)
+                fd.append('photos', p.blob, p.name);
+            }
+        });
+        delSubmit.disabled = true;
+        delSubmit.textContent = 'Удаление…';
+        fetch('/api/moderator/vacancy/' + delVacancyId + '/delete/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': _csrf()},
+            credentials: 'same-origin',
+            body: fd,
+        }).then(function(r){ return r.json().then(function(d){ return {status: r.status, data: d}; }); })
+        .then(function(resp){
+            delSubmit.disabled = false;
+            delSubmit.textContent = 'Удалить вакансию';
+            if (resp.status >= 200 && resp.status < 300 && resp.data && resp.data.ok){
+                closeDelModal();
+                var card = document.querySelector('.mod-vacancy-card [data-vacancy-id="'+delVacancyId+'"]');
+                var container = card ? card.closest('.mod-vacancy-card') : null;
+                if (container){
+                    container.style.transition = 'opacity 0.35s';
+                    container.style.opacity = '0';
+                    setTimeout(function(){ container.remove(); }, 380);
+                }
+            } else {
+                var msg = (resp.data && resp.data.detail) || 'Не удалось удалить вакансию.';
+                alert(msg);
+            }
+        }).catch(function(){
+            delSubmit.disabled = false;
+            delSubmit.textContent = 'Удалить вакансию';
+            alert('Сетевая ошибка.');
+        });
+    });
+
+    document.querySelectorAll('.js-vacancy-save').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var vacancyId = btn.getAttribute('data-vacancy-id');
+            var status = document.querySelector('.js-vacancy-status[data-vacancy-id="'+vacancyId+'"]');
+            var note = document.querySelector('.js-vacancy-note[data-vacancy-id="'+vacancyId+'"]');
+            if (!status || !note) return;
+            btn.disabled = true;
+            fetch('/api/reports/vacancy/' + vacancyId + '/state/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf()},
+                body: JSON.stringify({status: status.value, note: note.value.trim()}),
+                credentials: 'same-origin'
+            }).then(function(r){ return r.json(); })
+              .then(function(d){
+                btn.disabled = false;
+                if (!d.ok) { alert('Не удалось сохранить изменения.'); return; }
+                var card = btn.closest('.mod-vacancy-card');
+                if (card){
+                    var statusMeta = card.querySelector('.js-card-status-label');
+                    if (statusMeta){
+                        var selected = status.options[status.selectedIndex];
+                        statusMeta.textContent = selected ? selected.textContent : status.value;
+                    }
+                    var noteMeta = card.querySelector('.js-card-note-label');
+                    if (noteMeta){
+                        noteMeta.textContent = note.value.trim() || '—';
+                    }
+                }
+              }).catch(function(){ btn.disabled = false; alert('Сетевая ошибка.'); });
         });
     });
 })();
 
 /* ════════════════════════════════════════════════════════
-   Calendar
+   Calendar (compact month grid, identical to administrator)
 ════════════════════════════════════════════════════════ */
 (function(){
     'use strict';
@@ -611,6 +665,7 @@ animateAdminStats();
     function _pad(n){ return n < 10 ? '0'+n : ''+n; }
     function _key(y,m,d){ return y+'-'+_pad(m+1)+'-'+_pad(d); }
     function _csrf(){ var m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+    function _esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
     function calRender(){
         var t = new Date();
@@ -698,7 +753,8 @@ animateAdminStats();
         var probe = monthKey+'-01';
         fetch('/accounts/api/calendar/events/?date='+probe+'&_ts='+Date.now(), {
             headers:{'X-Requested-With':'XMLHttpRequest'},
-            cache: 'no-store'
+            cache: 'no-store',
+            credentials: 'same-origin'
         })
         .then(function(r){return r.json();})
         .then(function(d){
@@ -723,7 +779,8 @@ animateAdminStats();
         body.innerHTML = '<p class="cal-loading">Загрузка…</p>';
         fetch('/accounts/api/calendar/events/?date='+key+'&_ts='+Date.now(), {
             headers:{'X-Requested-With':'XMLHttpRequest'},
-            cache: 'no-store'
+            cache: 'no-store',
+            credentials: 'same-origin'
         })
         .then(function(r){return r.json();})
         .then(function(d){
@@ -813,15 +870,9 @@ animateAdminStats();
                 var targetDate = prompt('Введите новую дату (YYYY-MM-DD):', dateKey);
                 if (!targetDate) return;
                 targetDate = targetDate.trim();
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
-                    alert('Неверный формат даты. Используйте YYYY-MM-DD.');
-                    return;
-                }
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) { alert('Неверный формат даты. Используйте YYYY-MM-DD.'); return; }
                 var dt = new Date(targetDate + 'T00:00:00');
-                if (isNaN(dt.getTime())) {
-                    alert('Некорректная дата.');
-                    return;
-                }
+                if (isNaN(dt.getTime())) { alert('Некорректная дата.'); return; }
                 moveNoteCompact(noteId, targetDate, dateKey, noteTime);
             });
         });
@@ -838,31 +889,24 @@ animateAdminStats();
         });
     }
 
-    function _esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
     function moveNoteCompact(noteId, newDate, oldDate, noteTime){
         var payload = {id: noteId, date: newDate};
         payload.time = noteTime || null;
         fetch('/accounts/api/calendar/note/', {
             method: 'PATCH',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            credentials: 'same-origin',
             body: JSON.stringify(payload),
         }).then(function(r){ return r.json(); }).then(function(d){
             if (d.ok){
                 var selectedBefore = _selectedKey;
                 var monthKey = _year + '-' + _pad(_month + 1);
-
                 delete _monthMarks[oldDate];
                 if (newDate.indexOf(monthKey + '-') === 0) delete _monthMarks[newDate];
                 _monthMarks['__month'] = monthKey;
                 calRender();
-
-                if (selectedBefore){
-                    selectDay(selectedBefore, +selectedBefore.split('-')[2]);
-                } else {
-                    _monthMarks['__month'] = null;
-                    loadMonthMarks();
-                }
+                if (selectedBefore){ selectDay(selectedBefore, +selectedBefore.split('-')[2]); }
+                else { _monthMarks['__month'] = null; loadMonthMarks(); }
             }
         }).catch(function(){});
     }
@@ -872,6 +916,7 @@ animateAdminStats();
         fetch('/accounts/api/calendar/note/', {
             method: 'DELETE',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            credentials: 'same-origin',
             body: JSON.stringify({id: +id}),
         }).then(function(r){return r.json();}).then(function(d){
             if(d.ok){
@@ -888,6 +933,7 @@ animateAdminStats();
         fetch('/accounts/api/interviews/cancel/', {
             method: 'DELETE',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            credentials: 'same-origin',
             body: JSON.stringify({id: +id}),
         }).then(function(r){return r.json();}).then(function(d){
             if(d.ok){
@@ -949,19 +995,21 @@ animateAdminStats();
             var evs=byHour[h]||[];
             var evHtml=evs.map(function(ev){
                 var c=colorMap[ev.type]||'var(--accent)';
-                return '<div class="cal-hour-chip" style="border-color:'+c+'">'+'<b>'+ev.icon+' '+_esc(ev.title)+'</b>'+(ev.sub?'<span>'+_esc(ev.sub)+'</span>':'')+'</div>';
+                return '<div class="cal-hour-chip" style="border-color:'+c+'">'+'<b>'+(ev.icon||'')+' '+_esc(ev.title)+'</b>'+(ev.sub?'<span>'+_esc(ev.sub)+'</span>':'')+'</div>';
             }).join('');
             html+='<div class="cal-hour-row'+(evs.length?' cal-hour-row--has-events':'')+'"><div class="cal-hour-label">'+_pad(h)+':00</div><div class="cal-hour-events">'+evHtml+'</div></div>';
         }
         document.getElementById('cal-day-tl-body').innerHTML=html;
         tl.style.display='';
-        tl.scrollIntoView({behavior:'smooth',block:'nearest'});
     }
 
     window._calGetState = function(){ return {year: _year, month: _month, selectedKey: _selectedKey}; };
     window.calRender = calRender;
 })();
 
+/* ════════════════════════════════════════════════════════
+   Fullscreen calendar (month + week views, search, ICS export)
+════════════════════════════════════════════════════════ */
 var _calApiEventsUrl = '/accounts/api/calendar/events/';
 (function(){
     'use strict';
@@ -997,11 +1045,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         var btn = document.getElementById('cal-fs-search-next');
         if (!btn) return;
         var total = _fsSearchOrder.length;
-        if (!total){
-            btn.disabled = true;
-            btn.textContent = 'Дальше';
-            return;
-        }
+        if (!total){ btn.disabled = true; btn.textContent = 'Дальше'; return; }
         btn.disabled = false;
         btn.textContent = 'Дальше (' + (_fsSearchIndex + 1) + '/' + total + ')';
     }
@@ -1011,9 +1055,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         var key = _fsSearchOrder[_fsSearchIndex];
         var parsed = _parseDateKey(key);
         if (!parsed) return;
-        _fsYear = parsed.year;
-        _fsMonth = parsed.month;
-        _fsSel = key;
+        _fsYear = parsed.year; _fsMonth = parsed.month; _fsSel = key;
         if (_fsView === 'week'){
             _fsWeekDate = _weekMonday(key);
             renderFsWeek();
@@ -1077,7 +1119,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
     function loadFsMonthMarks(){
         var probe = _fsYear+'-'+_pad(_fsMonth+1)+'-01';
         if (_fsMarkCache['__month'] === probe){ renderFsMonth(); return; }
-        fetch(_calApiEventsUrl+'?date='+probe)
+        fetch(_calApiEventsUrl+'?date='+probe, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (d.month_marks){ Object.assign(_fsMarkCache, d.month_marks); _fsMarkCache['__month'] = probe; }
@@ -1158,7 +1200,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         document.getElementById('cal-fs-detail-date').textContent =
             (+parts[2])+' '+MONTH_NAMES_GEN[+parts[1]-1]+' '+(+parts[0]);
         body.innerHTML = '<p class="cal-loading">Загрузка…</p>';
-        fetch(_calApiEventsUrl+'?date='+key)
+        fetch(_calApiEventsUrl+'?date='+key, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (!d.ok){ body.innerHTML = '<p class="cal-detail__empty">Ошибка загрузки.</p>'; return; }
@@ -1228,14 +1270,14 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
                 if (type === 'interview'){
                     if (!confirm('Отменить собеседование?')) return;
                     btn.disabled = true;
-                    fetch('/accounts/api/interviews/cancel/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},body:JSON.stringify({id:+id})})
+                    fetch('/accounts/api/interviews/cancel/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},credentials:'same-origin',body:JSON.stringify({id:+id})})
                         .then(function(r){return r.json();}).then(function(d){
                             if (d.ok){ _refreshAfterDayUpdate(); }
                             else btn.disabled = false;
                         }).catch(function(){ btn.disabled = false; });
                 } else {
                     btn.disabled = true;
-                    fetch('/accounts/api/calendar/note/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},body:JSON.stringify({id:+id})})
+                    fetch('/accounts/api/calendar/note/', {method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':_csrf()},credentials:'same-origin',body:JSON.stringify({id:+id})})
                         .then(function(r){return r.json();}).then(function(d){
                             if (d.ok){ _refreshAfterDayUpdate(); }
                             else btn.disabled = false;
@@ -1258,12 +1300,12 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
     }
 
     function moveNote(noteId, newDate, oldDate, noteTime){
-        // preserve time on drag-and-drop; noteTime may be '' if not set
         var payload = {id: noteId, date: newDate};
         if (noteTime !== undefined) payload.time = noteTime || null;
         fetch('/accounts/api/calendar/note/', {
             method: 'PATCH',
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            credentials: 'same-origin',
             body: JSON.stringify(payload),
         }).then(function(r){ return r.json(); }).then(function(d){
             if (d.ok){
@@ -1338,7 +1380,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
 
         var promises = days.map(function(d){
             var k = _key(d.getFullYear(), d.getMonth(), d.getDate());
-            return fetch(_calApiEventsUrl+'?date='+k)
+            return fetch(_calApiEventsUrl+'?date='+k, {credentials:'same-origin'})
                 .then(function(r){ return r.json(); })
                 .then(function(data){ return {key:k, events:data.events||[]}; })
                 .catch(function(){ return {key:k, events:[]}; });
@@ -1362,7 +1404,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         document.querySelectorAll('#cal-fs-wk-header .cal-wk-th').forEach(function(th){
             th.classList.toggle('cal-wk-th--selected', th.getAttribute('data-key') === key);
         });
-        fetch(_calApiEventsUrl+'?date='+key)
+        fetch(_calApiEventsUrl+'?date='+key, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (!d.ok){ body.innerHTML = '<p class="cal-detail__empty">Ошибка загрузки.</p>'; return; }
@@ -1418,14 +1460,8 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
                         var hhStr = (hh < 10 ? '0' : '') + hh;
                         var defaultMinute = ((_fsDragNote.noteTime || '').split(':')[1] || '00');
                         var mm = _askMinutesForWeekDrop(defaultMinute);
-                        if (mm === false){
-                            alert('Минуты должны быть числом от 00 до 59.');
-                            _fsDragNote = null;
-                            return;
-                        }
-                        if (mm !== null){
-                            moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, hhStr + ':' + mm);
-                        }
+                        if (mm === false){ alert('Минуты должны быть числом от 00 до 59.'); _fsDragNote = null; return; }
+                        if (mm !== null){ moveNote(_fsDragNote.id, nd, _fsDragNote.fromDate, hhStr + ':' + mm); }
                     }
                     _fsDragNote = null;
                     setTimeout(renderFsWeek, 350);
@@ -1443,12 +1479,8 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         var q = this.value.trim().toLowerCase();
         clearTimeout(_fsSearchTimer);
         if (!q){
-            _fsSearchMatches = {};
-            _fsSearchOrder = [];
-            _fsSearchIndex = -1;
-            _updateSearchNextButton();
-            renderFsMonth();
-            return;
+            _fsSearchMatches = {}; _fsSearchOrder = []; _fsSearchIndex = -1;
+            _updateSearchNextButton(); renderFsMonth(); return;
         }
         _fsSearchTimer = setTimeout(function(){ _doSearch(q); }, 280);
     });
@@ -1458,13 +1490,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
             _fsSearchMatches = {};
             events.forEach(function(ev){
                 if (ev.type === 'note'){
-                    // Support both legacy and current note payload shapes.
-                    var searchIn = (
-                        (ev.title || '') + ' ' +
-                        (ev.text || '') + ' ' +
-                        (ev.body || '') + ' ' +
-                        (ev.sub || '')
-                    ).toLowerCase();
+                    var searchIn = ((ev.title || '') + ' ' + (ev.text || '') + ' ' + (ev.body || '') + ' ' + (ev.sub || '')).toLowerCase();
                     if (searchIn.indexOf(q) !== -1){
                         _fsSearchMatches[ev.date] = _fsSearchMatches[ev.date]||[];
                         _fsSearchMatches[ev.date].push(ev.title || ev.text || ev.body || 'Заметка');
@@ -1472,29 +1498,19 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
                 }
             });
             _fsSearchOrder = Object.keys(_fsSearchMatches).sort();
-            if (_fsSearchOrder.length){
-                _focusSearchMatchByIndex(0);
-            } else {
-                _fsSearchIndex = -1;
-                _updateSearchNextButton();
-                renderFsMonth();
-            }
+            if (_fsSearchOrder.length){ _focusSearchMatchByIndex(0); }
+            else { _fsSearchIndex = -1; _updateSearchNextButton(); renderFsMonth(); }
         }, true);
     }
 
     function _loadSearchEvents(cb, forceReload){
         if (_fsSearchSourceEvents && !forceReload){ cb(_fsSearchSourceEvents); return; }
-        fetch('/accounts/api/calendar/notes-index/')
+        fetch('/accounts/api/calendar/notes-index/', {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (d && d.ok && Array.isArray(d.events)){
-                    _fsSearchSourceEvents = d.events;
-                    cb(d.events);
-                } else {
-                    cb([]);
-                }
-            })
-            .catch(function(){ cb([]); });
+                if (d && d.ok && Array.isArray(d.events)){ _fsSearchSourceEvents = d.events; cb(d.events); }
+                else cb([]);
+            }).catch(function(){ cb([]); });
     }
 
     document.getElementById('cal-fs-search-next').addEventListener('click', function(){
@@ -1504,17 +1520,12 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
 
     function _loadMonthEvents(cb, forceReload){
         if (_fsMonthEvents && !forceReload){ cb(_fsMonthEvents); return; }
-        fetch('/accounts/api/calendar/month/?year='+_fsYear+'&month='+(_fsMonth+1))
+        fetch('/accounts/api/calendar/month/?year='+_fsYear+'&month='+(_fsMonth+1), {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (d && d.ok && Array.isArray(d.events)){
-                    _fsMonthEvents = d.events;
-                    cb(d.events);
-                } else {
-                    cb([]);
-                }
-            })
-            .catch(function(){ cb([]); });
+                if (d && d.ok && Array.isArray(d.events)){ _fsMonthEvents = d.events; cb(d.events); }
+                else cb([]);
+            }).catch(function(){ cb([]); });
     }
 
     function exportIcs(){
@@ -1597,7 +1608,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
 })();
 
 /* ════════════════════════════════════════════════════════
-   Note popup modal
+   Note popup modal (shared by compact + fullscreen views)
 ════════════════════════════════════════════════════════ */
 (function(){
     'use strict';
@@ -1623,22 +1634,17 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         colorRow.querySelectorAll('.note-modal__color-swatch').forEach(function(sw){
             sw.classList.toggle('active', sw.getAttribute('data-color') === c);
         });
-        // Update custom picker visual
         var wrap = colorRow.querySelector('.note-modal__color-custom-wrap');
         if (wrap) wrap.style.background = PALETTE.indexOf(c) === -1 ? c : '';
     }
 
-    // Wire palette swatches
     colorRow.querySelectorAll('.note-modal__color-swatch').forEach(function(sw){
         sw.addEventListener('click', function(){ _setColor(sw.getAttribute('data-color')); });
     });
-
-    // Custom color input
     customIn.addEventListener('input', function(){ _setColor(customIn.value); });
     customIn.addEventListener('change', function(){ _setColor(customIn.value); });
 
     function openModal(opts){
-        // opts: {mode:'create'|'edit', date, id?, title?, body?, color?, time?, onSaved}
         _onSaved  = opts.onSaved || null;
         _editId   = opts.mode === 'edit' ? opts.id : null;
         _editDate = opts.date;
@@ -1654,9 +1660,7 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
     }
     window.openNoteModal = openModal;
 
-    function closeModal(){
-        overlay.style.display = 'none';
-    }
+    function closeModal(){ overlay.style.display = 'none'; }
 
     document.getElementById('note-modal-close').addEventListener('click', closeModal);
     document.getElementById('note-modal-cancel').addEventListener('click', closeModal);
@@ -1680,17 +1684,13 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         };
 
         var method, url = '/accounts/api/calendar/note/';
-        if (_editId){
-            method = 'PATCH';
-            payload.id = _editId;
-        } else {
-            method = 'POST';
-            payload.date = _editDate;
-        }
+        if (_editId){ method = 'PATCH'; payload.id = _editId; }
+        else { method = 'POST'; payload.date = _editDate; }
 
         fetch(url, {
             method: method,
             headers: {'Content-Type':'application/json','X-CSRFToken':_csrf()},
+            credentials: 'same-origin',
             body: JSON.stringify(payload),
         }).then(function(r){ return r.json(); }).then(function(d){
             saveBtn.disabled = false;
@@ -1701,106 +1701,5 @@ var _calApiEventsUrl = '/accounts/api/calendar/events/';
         }).catch(function(){ saveBtn.disabled = false; });
     });
 })();
-
-/* ════════════════════════════════════════════════════════
-   Admin quick macros
-════════════════════════════════════════════════════════ */
-(function(){
-    var fab = document.getElementById('adm-macro-fab');
-    var ov  = document.getElementById('adm-macro-overlay');
-    var cls = document.getElementById('adm-macro-close');
-    var toast = document.getElementById('adm-macro-toast');
-    if (!fab || !ov || !cls || !toast) return;
-    var toastTimer = null;
-
-    function open(){ ov.style.display = 'flex'; }
-    function close(){ ov.style.display = 'none'; }
-    function toggle(){ if (ov.style.display === 'none') open(); else close(); }
-    function isOpen(){ return ov.style.display !== 'none'; }
-    function showToast(message){
-        toast.textContent = message;
-        toast.classList.add('show');
-        if (toastTimer) clearTimeout(toastTimer);
-        toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 1400);
-    }
-    function copyText(text, okMessage){
-        if (!text) return;
-        navigator.clipboard.writeText(text).then(function(){
-            showToast(okMessage || 'Скопировано');
-        }).catch(function(){
-            showToast('Не удалось скопировать');
-        });
-    }
-    function openUrl(url, okMessage){
-        window.open(url, '_blank', 'noopener');
-        showToast(okMessage);
-    }
-
-    fab.addEventListener('click', open);
-    cls.addEventListener('click', close);
-    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
-    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && ov.style.display !== 'none') close(); });
-
-    function copyMacroById(id){
-        var el = document.getElementById(id);
-        if (!el) return;
-        var text = el.textContent || '';
-        copyText(text, 'Команда скопирована');
-    }
-
-    ov.querySelectorAll('[data-copy-target]').forEach(function(btn){
-        btn.addEventListener('click', function(){
-            var id = btn.getAttribute('data-copy-target');
-            var el = document.getElementById(id);
-            if (!el) return;
-            var text = el.textContent || '';
-            copyText(text, 'Команда скопирована');
-            btn.textContent = 'Скопировано';
-            setTimeout(function(){ btn.textContent = 'Скопировать команду'; }, 1200);
-        });
-    });
-
-    document.addEventListener('keydown', function(e){
-        var key = (e.key || '').toLowerCase();
-        var code = e.code || '';
-        var activeTag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
-        var inField = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
-
-        if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (code === 'F8' || key === 'f8' || code === 'Backquote' || key === '`' || key === 'ё')) {
-            e.preventDefault();
-            toggle();
-            return;
-        }
-
-        if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey || inField) return;
-        if (!isOpen()) return;
-        if (code === 'Digit1' || code === 'Numpad1' || key === '1') {
-            e.preventDefault();
-            copyMacroById('macro-cmd-reset');
-            return;
-        }
-        if (code === 'Digit2' || code === 'Numpad2' || key === '2') {
-            e.preventDefault();
-            copyMacroById('macro-cmd-sync');
-            return;
-        }
-        if (code === 'Digit3' || code === 'Numpad3' || key === '3') {
-            e.preventDefault();
-            openUrl('/admin/', 'Django Admin открыт');
-            return;
-        }
-        if (code === 'Digit4' || code === 'Numpad4' || key === '4') {
-            e.preventDefault();
-            openUrl('/swagger/', 'Swagger открыт');
-            return;
-        }
-        if (code === 'Digit5' || code === 'Numpad5' || key === '5') {
-            e.preventDefault();
-            openUrl('/redoc/', 'ReDoc открыт');
-        }
-    });
-})();
 </script>
-{% include 'includes/site_footer.html' %}
-</body>
-</html>
+{% endblock %}

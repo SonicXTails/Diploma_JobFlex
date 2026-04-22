@@ -1,4 +1,5 @@
 import uuid
+import json
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -15,11 +16,12 @@ from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from vacancies.models import HhDictionaryItem, Vacancy, Employer
+from vacancies.models import (
+	HhDictionaryItem, Vacancy, Employer, VacancyReport, VacancyModerationState,
+	ModeratorDeletionReport, ModeratorDeletionPhoto,
+)
 from .rating import compute_vacancy_rating
 from accounts.models import FilterPreset
-
-
 
 class VacancyListView(ListView):
 	model = Vacancy
@@ -36,6 +38,10 @@ class VacancyListView(ListView):
 		if request.user.is_authenticated and hasattr(request.user, 'manager'):
 			from django.shortcuts import redirect
 			return redirect('my-vacancies')
+		# Moderators see moderation workspace
+		if request.user.is_authenticated and hasattr(request.user, 'moderator_profile'):
+			from django.shortcuts import redirect
+			return redirect('accounts:moderator_analytics')
 		return super().dispatch(request, *args, **kwargs)
 
 	def setup(self, request, *args, **kwargs):
@@ -634,10 +640,18 @@ class VacancyDetailView(DetailView):
 
 	def get_object(self, queryset=None):
 		external_id = self.kwargs.get('pk')
-		return get_object_or_404(
-			Vacancy.objects.select_related('employer'),
-			external_id=external_id,
+		qs = Vacancy.objects.select_related('employer')
+		# Hide soft-deleted vacancies from everyone except moderators/admins so
+		# that applicants/managers don't get stuck on a stale detail page.
+		user = getattr(self.request, 'user', None)
+		is_priv = bool(
+			user and user.is_authenticated and (
+				user.is_superuser or hasattr(user, 'moderator_profile')
+			)
 		)
+		if not is_priv:
+			qs = qs.exclude(is_moderator_deleted=True)
+		return get_object_or_404(qs, external_id=external_id)
 
 	@staticmethod
 	def _resolve_metro_coords(station_id):
@@ -665,7 +679,11 @@ class VacancyDetailView(DetailView):
 		ctx['employer_logo_url'] = vac.employer_logo_url
 
 		# ── Inline description fetch (sync, short timeout) ──────────────
-		if not vac.description and not vac.branded_description:
+		# Skip remote fetch for non-HH (site-created) vacancies entirely —
+		# they legitimately have no HH description and would only hang the
+		# request for a 404 round-trip.
+		_is_hh_vac = 'hh.ru' in (vac.url or '')
+		if (not vac.description and not vac.branded_description and _is_hh_vac):
 			hh_id = (vac.raw_json or {}).get('id') or vac.external_id
 			if hh_id:
 				try:
@@ -927,6 +945,19 @@ class VacancyDetailView(DetailView):
 			ctx['user_application'] = Application.objects.filter(
 				vacancy=vac, applicant=user
 			).first()
+		user_can_report = (
+			user.is_authenticated
+			and (not vac.is_hh)
+			and (hasattr(user, 'applicant') or hasattr(user, 'manager'))
+		)
+		ctx['can_report_vacancy'] = user_can_report
+		ctx['has_reported_vacancy'] = False
+		ctx['report_reason_choices'] = VacancyReport.REASON_CHOICES
+		if user_can_report:
+			ctx['has_reported_vacancy'] = VacancyReport.objects.filter(
+				user=user,
+				vacancy=vac,
+			).exists()
 		ctx['user_is_creator'] = user.is_authenticated and vac.created_by_id == user.pk
 		if user.is_authenticated and hasattr(user, 'manager'):
 			ctx['application_count'] = vac.applications.count()
@@ -944,7 +975,6 @@ class VacancyDetailView(DetailView):
 			ctx['is_bookmarked'] = Bookmark.objects.filter(user=user, vacancy=vac).exists()
 		else:
 			ctx['is_bookmarked'] = False
-
 		return ctx
 
 
@@ -988,8 +1018,12 @@ def employer_rating_api(request, hh_id):
 	cache_key = f'rating_inflight_{emp.pk}'
 	if not cache.get(cache_key):
 		cache.set(cache_key, 1, timeout=300)
-		from .tasks import fetch_employer_rating
-		fetch_employer_rating.delay(emp.pk)
+		try:
+			from .tasks import fetch_employer_rating
+			fetch_employer_rating.delay(emp.pk)
+		except Exception:
+			# Redis/Celery may be unavailable in local dev; keep API non-failing.
+			pass
 
 	return JsonResponse({'rating': None, 'source': None, 'pending': True})
 
@@ -1068,11 +1102,15 @@ def vacancy_branded_frame_view(request, pk):
 @permission_classes([AllowAny])
 def vacancy_description_api(request, pk):
 	try:
-		v = Vacancy.objects.only('id', 'description', 'branded_description').get(pk=pk)
+		v = Vacancy.objects.only('id', 'external_id', 'description', 'branded_description', 'url').get(pk=pk)
 	except Vacancy.DoesNotExist:
 		return JsonResponse({'error': 'not found'}, status=404)
-
 	if not v.description and not v.branded_description:
+		# Non-HH vacancies (site-created) may legitimately have no description;
+		# do not keep frontend in pending polling loop for them.
+		is_hh = 'hh.ru' in (v.url or '')
+		if not is_hh or str(v.external_id or '').startswith('site-'):
+			return JsonResponse({'pending': False, 'description': '', 'branded': ''})
 		# Fire Celery task as fallback (view already tried sync fetch)
 		try:
 			from .tasks import fetch_vacancy_description
@@ -1383,7 +1421,275 @@ def vacancy_delete(request, pk):
 	return redirect('vacancy-detail', pk=vac.external_id)
 
 
-@swagger_auto_schema(method='patch', operation_summary="Архивировать / восстановить вакансию", tags=['vacancies'])
+@login_required
+def api_vacancy_report(request, pk):
+	"""Create a complaint for a site-created vacancy (one report per user)."""
+	if request.method != 'POST':
+		return JsonResponse({'error': 'method_not_allowed'}, status=405)
+	if (not hasattr(request.user, 'applicant')) and (not hasattr(request.user, 'manager')):
+		return JsonResponse({'error': 'forbidden_role'}, status=403)
+
+	vac = get_object_or_404(Vacancy, pk=pk)
+	if vac.is_hh:
+		return JsonResponse({'error': 'hh_vacancy_not_reportable'}, status=400)
+
+	try:
+		data = json.loads(request.body or b'{}')
+	except Exception:
+		data = {}
+
+	reason_code = (data.get('reason_code') or '').strip()
+	reason_text = (data.get('reason_text') or '').strip()
+	allowed_codes = {c[0] for c in VacancyReport.REASON_CHOICES}
+	if reason_code not in allowed_codes:
+		return JsonResponse({'error': 'invalid_reason_code'}, status=400)
+	if reason_code == VacancyReport.REASON_OTHER and not reason_text:
+		return JsonResponse({'error': 'reason_text_required'}, status=400)
+
+	report, created = VacancyReport.objects.get_or_create(
+		user=request.user,
+		vacancy=vac,
+		defaults={
+			'reason_code': reason_code,
+			'reason_text': reason_text,
+		},
+	)
+	if not created:
+		return JsonResponse({'ok': True, 'already_reported': True, 'id': report.pk})
+	return JsonResponse({'ok': True, 'already_reported': False, 'id': report.pk})
+
+
+@login_required
+def api_report_self_status_update(request, pk):
+	"""Moderator-only endpoint: update personal processing fields for a report."""
+	if request.method not in ('POST', 'PATCH'):
+		return JsonResponse({'error': 'method_not_allowed'}, status=405)
+	if not hasattr(request.user, 'moderator_profile'):
+		return JsonResponse({'error': 'forbidden'}, status=403)
+
+	report = get_object_or_404(VacancyReport, pk=pk)
+	try:
+		data = json.loads(request.body or b'{}')
+	except Exception:
+		data = {}
+
+	new_status = (data.get('self_status') or '').strip()
+	note = (data.get('moderator_note') or '').strip()
+	if new_status not in {s[0] for s in VacancyReport.SELF_STATUS_CHOICES}:
+		return JsonResponse({'error': 'invalid_status'}, status=400)
+
+	report.self_status = new_status
+	report.moderator_note = note
+	report.reviewed_by = request.user
+	report.reviewed_at = timezone.now()
+	report.save(update_fields=['self_status', 'moderator_note', 'reviewed_by', 'reviewed_at', 'updated_at'])
+	return JsonResponse({'ok': True})
+
+
+@login_required
+def api_vacancy_moderation_update(request, vacancy_id):
+	"""Moderator-only endpoint: update card-level vacancy moderation status and note."""
+	if request.method not in ('POST', 'PATCH'):
+		return JsonResponse({'error': 'method_not_allowed'}, status=405)
+	if not hasattr(request.user, 'moderator_profile'):
+		return JsonResponse({'error': 'forbidden'}, status=403)
+
+	vac = get_object_or_404(Vacancy, pk=vacancy_id)
+	try:
+		data = json.loads(request.body or b'{}')
+	except Exception:
+		data = {}
+
+	new_status = (data.get('status') or '').strip()
+	note = (data.get('note') or '').strip()
+	allowed_status = {s[0] for s in VacancyModerationState.STATUS_CHOICES}
+	if new_status not in allowed_status:
+		return JsonResponse({'error': 'invalid_status'}, status=400)
+
+	state, _ = VacancyModerationState.objects.get_or_create(
+		vacancy=vac,
+		moderator=request.user,
+		defaults={'status': VacancyModerationState.STATUS_NEW, 'note': ''},
+	)
+	state.status = new_status
+	state.note = note
+	state.save(update_fields=['status', 'note', 'updated_at'])
+	return JsonResponse({'ok': True})
+
+
+# ─────────────────────────────────────────────────────────────
+#  Moderator — vacancy soft-deletion with PDF report
+# ─────────────────────────────────────────────────────────────
+
+MAX_DELETION_PHOTOS = 8
+MAX_PHOTO_BYTES = 8 * 1024 * 1024  # 8 MB per photo
+
+
+def _compute_dominant_report_reason(vacancy):
+	"""Return (code, label) for the most common report reason on the vacancy.
+
+	If no reports exist, returns ('', ''). If several reasons tie on top,
+	returns ('', 'Неизвестно') so the PDF reflects the ambiguity.
+	"""
+	reason_counts = {}
+	reports = list(vacancy.reports.all())
+	for r in reports:
+		reason_counts[r.reason_code] = reason_counts.get(r.reason_code, 0) + 1
+	if not reason_counts:
+		return ('', '')
+	sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
+	if len(sorted_reasons) > 1 and sorted_reasons[0][1] == sorted_reasons[1][1]:
+		return ('', 'Неизвестно')
+	code = sorted_reasons[0][0]
+	label = dict(VacancyReport.REASON_CHOICES).get(code, code)
+	return (code, label)
+
+
+@login_required
+def api_moderator_delete_vacancy(request, vacancy_id):
+	"""Moderator-only: soft-delete a vacancy and record a deletion report.
+
+	Accepts multipart/form-data with:
+	  - reason         (text, required)
+	  - photos         (one or more image files, optional)
+	  - photos_b64[]   (one or more data:image/...;base64,... strings from clipboard paste, optional)
+	"""
+	from django.core.files.base import ContentFile
+	import base64
+
+	if request.method != 'POST':
+		return JsonResponse({'error': 'method_not_allowed', 'detail': 'Неверный метод запроса.'}, status=405)
+	if not hasattr(request.user, 'moderator_profile'):
+		return JsonResponse({'error': 'forbidden', 'detail': 'Нет прав для выполнения этого действия.'}, status=403)
+
+	vac = get_object_or_404(Vacancy, pk=vacancy_id)
+	if vac.is_moderator_deleted:
+		return JsonResponse({'error': 'already_deleted', 'detail': 'Вакансия уже была удалена ранее.'}, status=400)
+
+	reason = (request.POST.get('reason') or '').strip()
+	if not reason:
+		return JsonResponse({'error': 'reason_required', 'detail': 'Необходимо указать причину удаления.'}, status=400)
+	if len(reason) > 4000:
+		return JsonResponse({'error': 'reason_too_long', 'detail': 'Причина слишком длинная (максимум 4000 символов).'}, status=400)
+
+	photo_files = []
+	for f in request.FILES.getlist('photos'):
+		if not str(f.content_type or '').startswith('image/'):
+			return JsonResponse({'error': 'invalid_photo_type', 'detail': 'Один из файлов не является изображением.'}, status=400)
+		if f.size and f.size > MAX_PHOTO_BYTES:
+			return JsonResponse({'error': 'photo_too_large', 'detail': 'Один из файлов превышает допустимый размер (8 МБ).'}, status=400)
+		photo_files.append(('upload', f, None, None))
+
+	b64_list = request.POST.getlist('photos_b64[]') or request.POST.getlist('photos_b64')
+	for idx, b64_payload in enumerate(b64_list):
+		if not isinstance(b64_payload, str) or not b64_payload:
+			continue
+		raw = b64_payload
+		ext = 'png'
+		if raw.startswith('data:'):
+			try:
+				head, raw = raw.split(',', 1)
+				if 'image/jpeg' in head:
+					ext = 'jpg'
+				elif 'image/gif' in head:
+					ext = 'gif'
+				elif 'image/webp' in head:
+					ext = 'webp'
+			except ValueError:
+				return JsonResponse({'error': 'invalid_photo_payload', 'detail': 'Некорректный формат изображения из буфера обмена.'}, status=400)
+		try:
+			raw_bytes = base64.b64decode(raw, validate=False)
+		except Exception:
+			return JsonResponse({'error': 'invalid_photo_payload', 'detail': 'Некорректный формат изображения из буфера обмена.'}, status=400)
+		if len(raw_bytes) > MAX_PHOTO_BYTES:
+			return JsonResponse({'error': 'photo_too_large', 'detail': 'Одно из вставленных изображений превышает допустимый размер (8 МБ).'}, status=400)
+		photo_files.append(('paste', None, raw_bytes, ext))
+
+	if len(photo_files) > MAX_DELETION_PHOTOS:
+		return JsonResponse({'error': 'too_many_photos', 'detail': f'Можно прикрепить не более {MAX_DELETION_PHOTOS} фото.'}, status=400)
+
+	# Collect snapshot data.
+	manager_user = vac.created_by
+	manager_full = ''
+	manager_email = ''
+	if manager_user:
+		manager_full = (manager_user.get_full_name() or '').strip() or manager_user.username
+		manager_email = manager_user.email or ''
+
+	dominant_code, dominant_label = _compute_dominant_report_reason(vac)
+	reports_count = vac.reports.count()
+
+	moderator_full = (request.user.get_full_name() or '').strip() or request.user.username
+
+	report = ModeratorDeletionReport.objects.create(
+		vacancy=vac,
+		moderator=request.user,
+		manager=manager_user,
+		reason=reason,
+		vacancy_title=vac.title or '',
+		vacancy_company=vac.company or '',
+		vacancy_description=(vac.description or vac.branded_description or '')[:8000],
+		vacancy_external_id=vac.external_id or '',
+		manager_full_name=manager_full,
+		manager_email=manager_email,
+		moderator_full_name=moderator_full,
+		moderator_email=request.user.email or '',
+		reports_count=reports_count,
+		dominant_reason_code=dominant_code,
+		dominant_reason_label=dominant_label,
+	)
+
+	for order, item in enumerate(photo_files):
+		kind, upload, raw_bytes, ext = item
+		if kind == 'upload':
+			ModeratorDeletionPhoto.objects.create(report=report, image=upload, order=order)
+		else:
+			fname = f"paste-{order+1}.{ext}"
+			ModeratorDeletionPhoto.objects.create(
+				report=report,
+				image=ContentFile(raw_bytes, name=fname),
+				order=order,
+			)
+
+	# Soft-delete the vacancy.
+	vac.is_moderator_deleted = True
+	vac.is_active = False
+	vac.save(update_fields=['is_moderator_deleted', 'is_active', 'updated_at'])
+
+	return JsonResponse({
+		'ok': True,
+		'report_id': report.pk,
+		'photos': len(photo_files),
+	})
+
+
+@login_required
+def api_moderator_report_restore(request, report_id):
+	"""Admin-only: restore a vacancy that was soft-deleted by a moderator."""
+	if request.method != 'POST':
+		return JsonResponse({'error': 'method_not_allowed', 'detail': 'Неверный метод запроса.'}, status=405)
+	if not (request.user.is_superuser and hasattr(request.user, 'admin_profile')):
+		return JsonResponse({'error': 'forbidden', 'detail': 'Нет прав для выполнения этого действия.'}, status=403)
+
+	report = get_object_or_404(ModeratorDeletionReport, pk=report_id)
+	if report.is_restored:
+		return JsonResponse({'error': 'already_restored', 'detail': 'Вакансия уже была восстановлена ранее.'}, status=400)
+	vac = report.vacancy
+	if not vac:
+		return JsonResponse({'error': 'vacancy_missing', 'detail': 'Вакансия не найдена или была удалена из базы.'}, status=400)
+
+	vac.is_moderator_deleted = False
+	vac.is_active = True
+	vac.save(update_fields=['is_moderator_deleted', 'is_active', 'updated_at'])
+
+	report.is_restored = True
+	report.restored_by = request.user
+	report.restored_at = timezone.now()
+	report.save(update_fields=['is_restored', 'restored_by', 'restored_at'])
+
+	return JsonResponse({'ok': True})
+
+
 @api_view(['PATCH'])
 @login_required
 def api_vacancy_toggle_active(request, pk):
@@ -1400,7 +1706,12 @@ def api_vacancy_toggle_active(request, pk):
 def my_vacancies(request):
 	if not hasattr(request.user, 'manager'):
 		return redirect('vacancy-list')
-	vacancies = Vacancy.objects.filter(created_by=request.user).order_by('-created_at')
+	vacancies = (
+		Vacancy.objects
+		.filter(created_by=request.user)
+		.exclude(is_moderator_deleted=True)
+		.order_by('-created_at')
+	)
 	return render(request, 'vacancies/my_vacancies.html', {
 		'vacancies': vacancies,
 		'manager': request.user.manager,

@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body class="app-body" data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
+<body class="app-body" data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser and request.user.admin_profile %}admin{% elif request.user.moderator_profile %}moderator{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
     <header class="site-header">
         <div class="container header-inner">
             <a href="/" class="logo">
@@ -27,6 +27,9 @@
                 {% if request.user.manager %}
                 <a class="btn-link" href="{% url 'vacancy-create' %}">+ Создать вакансию</a>
                 <a class="btn-link" href="{% url 'my-vacancies' %}">📋 Мои вакансии</a>
+                {% endif %}
+                {% if request.user.moderator_profile %}
+                <a class="btn-link" href="{% url 'accounts:moderator_analytics' %}">🛡 Модерация</a>
                 {% endif %}
                 {% if request.user.manager or request.user.applicant %}
                 <a class="btn-link" href="{% url 'accounts:chat_list' %}">💬 Чаты</a>

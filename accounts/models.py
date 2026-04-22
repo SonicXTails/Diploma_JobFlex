@@ -180,6 +180,31 @@ class Administrator(models.Model):
         return f"Admin: {self.user.get_full_name() or self.user.username}"
 
 
+class Moderator(models.Model):
+    """
+    Профиль модератора системы.
+    Модератор не является superuser по умолчанию и имеет отдельный кабинет.
+    """
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='moderator_profile',
+        verbose_name='Пользователь',
+    )
+    patronymic = models.CharField('Отчество', max_length=150, blank=True)
+    phone = models.CharField('Телефон', max_length=30, blank=True)
+    telegram = models.CharField('Telegram', max_length=100, blank=True)
+    notes = models.TextField('Заметки', blank=True)
+    created_at = models.DateTimeField('Дата назначения', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Модератор'
+        verbose_name_plural = 'Модераторы'
+
+    def __str__(self):
+        return f"Moderator: {self.user.get_full_name() or self.user.username}"
+
+
 class Chat(models.Model):
     """A direct chat thread between one manager and one applicant."""
     manager   = models.ForeignKey(User, on_delete=models.CASCADE, related_name='manager_chats')
@@ -363,6 +388,7 @@ class ApiActionLog(models.Model):
     ACTOR_CHOICES = [
         ('system', 'System'),
         ('admin', 'Admin'),
+        ('moderator', 'Moderator'),
         ('manager', 'Manager'),
         ('applicant', 'Applicant'),
         ('user', 'User'),

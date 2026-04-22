@@ -18,13 +18,31 @@
     <div class="au-head">
         <div>
             <h1 class="au-title">Управление пользователями</h1>
-            <p class="au-sub">Редактирование контактов, смена роли и удаление аккаунтов.</p>
+            <p class="au-sub">Редактирование контактов, смена роли, удаление аккаунтов и создание модераторов.</p>
         </div>
     </div>
 
     {% if status_text %}
     <p class="au-status">{{ status_text }}</p>
     {% endif %}
+
+    <div class="au-card">
+        <form method="post" class="au-create-mod">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_moderator">
+            <h3 class="au-create-mod__title">Создать модератора</h3>
+            <div class="au-create-mod__grid">
+                <input class="au-input" type="text" name="new_moderator_username" placeholder="Логин *" required>
+                <input class="au-input" type="email" name="new_moderator_email" placeholder="Email *" required>
+                <input class="au-input" type="password" name="new_moderator_password" placeholder="Пароль *" required>
+                <input class="au-input" type="text" name="new_moderator_first_name" placeholder="Имя">
+                <input class="au-input" type="text" name="new_moderator_last_name" placeholder="Фамилия">
+                <input class="au-input" type="text" name="new_moderator_patronymic" placeholder="Отчество">
+                <input class="au-input" type="text" name="new_moderator_phone" placeholder="Телефон">
+            </div>
+            <button class="au-btn au-btn--role" type="submit">Создать модератора</button>
+        </form>
+    </div>
 
     <form method="get" class="au-search">
         <input class="au-input" type="text" name="q" value="{{ q }}" placeholder="Поиск по имени, email, телефону, telegram">
@@ -91,6 +109,7 @@
                     <select class="au-input au-role-select" name="new_role" data-no-cs>
                         <option value="applicant" {% if row.role == 'applicant' %}selected{% endif %}>Соискатель</option>
                         <option value="manager" {% if row.role == 'manager' %}selected{% endif %}>Менеджер</option>
+                        <option value="moderator" {% if row.role == 'moderator' %}selected{% endif %}>Модератор</option>
                         <option value="admin" {% if row.role == 'admin' %}selected{% endif %}>Администратор</option>
                     </select>
                     <button class="au-btn au-btn--role" type="submit" name="action" value="change_role">Сменить роль</button>

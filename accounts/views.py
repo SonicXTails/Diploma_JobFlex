@@ -5,7 +5,7 @@ import re
 import uuid
 from datetime import date
 from django.db.models import Q
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User
 from django.http import JsonResponse, HttpResponse
 from django.core.paginator import Paginator
@@ -24,7 +24,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.http.request import RawPostDataException
 
-from .models import Applicant, Manager, Administrator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog
+from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog
 from .telegram import send_hello_async, get_bot_username, resolve_chat_id_by_token, notify_new_chat_message
 
 
@@ -58,12 +58,41 @@ def admin_required(view_func):
     return wrapper
 
 
+def is_moderator_user(user):
+    """Returns True only if authenticated user has a Moderator profile."""
+    return (
+        user.is_authenticated
+        and hasattr(user, 'moderator_profile')
+    )
+
+
+def moderator_required(view_func):
+    """Decorator: allows access only to moderators."""
+    from functools import wraps
+    from django.http import HttpResponseForbidden
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path(), login_url='/accounts/login/')
+        if not is_moderator_user(request.user):
+            return HttpResponseForbidden(
+                '<h2>403 — Доступ запрещён</h2>'
+                '<p>Эта страница доступна только модераторам системы.</p>'
+            )
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def _resolve_actor_role(user):
     """Map authenticated user to a stable actor role for API audit logs."""
     if not user or not getattr(user, 'is_authenticated', False):
         return 'system'
     if is_admin_user(user):
         return 'admin'
+    if is_moderator_user(user):
+        return 'moderator'
     if hasattr(user, 'manager'):
         return 'manager'
     if hasattr(user, 'applicant'):
@@ -153,6 +182,8 @@ def login_page(request):
 def profile_page(request):
     if is_admin_user(request.user):
         return redirect('accounts:admin_panel')
+    if is_moderator_user(request.user):
+        return redirect('accounts:moderator_analytics')
     return render(request, 'accounts/profile.html')
 
 
@@ -567,7 +598,12 @@ def api_login(request):
         return JsonResponse({'error': 'invalid_credentials'}, status=400)
 
     auth_login(request, user)
-    redirect_to = '/accounts/admin-panel/' if is_admin_user(user) else '/'
+    if is_admin_user(user):
+        redirect_to = '/accounts/admin-panel/'
+    elif is_moderator_user(user):
+        redirect_to = '/accounts/moderator/analytics/'
+    else:
+        redirect_to = '/'
     return JsonResponse({'ok': True, 'redirect_to': redirect_to})
 
 
@@ -1783,6 +1819,271 @@ def manager_analytics(request):
 
 
 # ─────────────────────────────────────────────────────────────
+#  Moderator analytics
+# ─────────────────────────────────────────────────────────────
+
+@moderator_required
+def moderator_analytics(request):
+    """Moderator workspace: reported vacancies queue + moderator productivity metrics."""
+    from django.db.models import Count, Avg, F, Max, ExpressionWrapper, DurationField, Q
+    from django.db.models.functions import TruncMonth
+    from django.utils import timezone
+    from vacancies.models import VacancyReport, VacancyModerationState
+
+    report_qs = (
+        VacancyReport.objects
+        .select_related('vacancy', 'user', 'reviewed_by')
+        .order_by('-created_at')
+    )
+    my_reports_qs = report_qs.filter(reviewed_by=request.user)
+
+    pending_count = report_qs.filter(self_status=VacancyReport.SELF_STATUS_NEW).count()
+    in_work_count = report_qs.filter(self_status=VacancyReport.SELF_STATUS_IN_WORK).count()
+    done_count = my_reports_qs.filter(self_status=VacancyReport.SELF_STATUS_DONE).count()
+    handled_count = my_reports_qs.count()
+
+    avg_reaction = my_reports_qs.filter(reviewed_at__isnull=False).annotate(
+        reaction_time=ExpressionWrapper(
+            F('reviewed_at') - F('created_at'),
+            output_field=DurationField(),
+        )
+    ).aggregate(value=Avg('reaction_time'))['value']
+
+    try:
+        avg_reaction_minutes = round(avg_reaction.total_seconds() / 60, 1) if avg_reaction else None
+    except Exception:
+        avg_reaction_minutes = None
+
+    # --- Charts and benchmarks for the moderator workspace ---
+    my_new_count = my_reports_qs.filter(self_status=VacancyReport.SELF_STATUS_NEW).count()
+    my_in_work_count = my_reports_qs.filter(self_status=VacancyReport.SELF_STATUS_IN_WORK).count()
+    my_done_count = done_count
+
+    reason_labels_map = dict(VacancyReport.REASON_CHOICES)
+    reason_rows = report_qs.values('reason_code').annotate(total=Count('id')).order_by('-total')
+    reasons_chart = {
+        'labels': [reason_labels_map.get(row['reason_code'], row['reason_code']) for row in reason_rows],
+        'values': [row['total'] for row in reason_rows],
+    }
+
+    month_rows = (
+        my_reports_qs.filter(reviewed_at__isnull=False)
+        .annotate(month=TruncMonth('reviewed_at'))
+        .values('month')
+        .annotate(total=Count('id'))
+        .order_by('month')
+    )
+    month_map = {}
+    for row in month_rows:
+        month_val = row.get('month')
+        if not month_val:
+            continue
+        key = month_val.strftime('%Y-%m')
+        month_map[key] = row['total']
+    month_series = []
+    today = timezone.now().date().replace(day=1)
+    for idx in range(5, -1, -1):
+        m = (today.month - idx - 1) % 12 + 1
+        y = today.year + ((today.month - idx - 1) // 12)
+        key = f'{y:04d}-{m:02d}'
+        month_series.append({
+            'label': f'{m:02d}.{str(y)[2:]}',
+            'value': month_map.get(key, 0),
+        })
+
+    per_moderator = (
+        report_qs.filter(reviewed_by__moderator_profile__isnull=False)
+        .values('reviewed_by_id', 'reviewed_by__username', 'reviewed_by__first_name', 'reviewed_by__last_name')
+        .annotate(
+            handled_total=Count('id'),
+            done_total=Count('id', filter=Q(self_status=VacancyReport.SELF_STATUS_DONE)),
+            avg_reaction=Avg(
+                ExpressionWrapper(F('reviewed_at') - F('created_at'), output_field=DurationField()),
+                filter=Q(reviewed_at__isnull=False),
+            ),
+        )
+        .order_by('-handled_total', 'reviewed_by__username')
+    )
+    moderators_total = max(1, Moderator.objects.count())
+    peers = []
+    for row in per_moderator:
+        full_name = f"{(row.get('reviewed_by__first_name') or '').strip()} {(row.get('reviewed_by__last_name') or '').strip()}".strip()
+        label = full_name or row.get('reviewed_by__username') or f"moderator-{row.get('reviewed_by_id')}"
+        avg_delta = row.get('avg_reaction')
+        peers.append({
+            'id': row.get('reviewed_by_id'),
+            'label': label,
+            'handled_total': row.get('handled_total') or 0,
+            'done_total': row.get('done_total') or 0,
+            'avg_reaction_minutes': round(avg_delta.total_seconds() / 60, 1) if avg_delta else None,
+        })
+
+    team_avg_handled = round(sum(p['handled_total'] for p in peers) / len(peers), 2) if peers else 0
+    peer_reaction_values = [p['avg_reaction_minutes'] for p in peers if p['avg_reaction_minutes'] is not None]
+    team_avg_reaction = round(sum(peer_reaction_values) / len(peer_reaction_values), 1) if peer_reaction_values else None
+
+    rank_by_handled = 1
+    for idx, peer in enumerate(peers, start=1):
+        if peer['id'] == request.user.id:
+            rank_by_handled = idx
+            break
+    percentile = round((moderators_total - rank_by_handled + 1) / moderators_total * 100)
+
+    compare = {
+        'team_avg_handled': team_avg_handled,
+        'my_handled': handled_count,
+        'handled_delta_pct': round(((handled_count - team_avg_handled) / team_avg_handled) * 100, 1) if team_avg_handled else 0.0,
+        'team_avg_reaction_minutes': team_avg_reaction,
+        'my_avg_reaction_minutes': avg_reaction_minutes,
+        'reaction_delta_pct': (
+            round(((team_avg_reaction - avg_reaction_minutes) / team_avg_reaction) * 100, 1)
+            if (team_avg_reaction and avg_reaction_minutes is not None)
+            else 0.0
+        ),
+        'rank': rank_by_handled,
+        'total_moderators': moderators_total,
+        'percentile': percentile,
+    }
+
+    top_peers = peers[:6]
+    peer_chart = {
+        'labels': [p['label'] for p in top_peers],
+        'values': [p['handled_total'] for p in top_peers],
+        'current_user_id': request.user.id,
+        'ids': [p['id'] for p in top_peers],
+    }
+    metrics_payload = {
+        'status': {
+            'labels': ['Новые', 'В работе', 'Обработано'],
+            'values': [my_new_count, my_in_work_count, my_done_count],
+        },
+        'reasons': reasons_chart,
+        'history': {
+            'labels': [item['label'] for item in month_series],
+            'values': [item['value'] for item in month_series],
+        },
+        'peer': peer_chart,
+        'compare': compare,
+    }
+
+    selected_review_status = (request.GET.get('review_status') or '').strip()
+    allowed_review_status = {s[0] for s in VacancyModerationState.STATUS_CHOICES}
+    if selected_review_status and selected_review_status not in allowed_review_status:
+        selected_review_status = ''
+
+    grouped_rows = (
+        report_qs.values('vacancy_id')
+        .annotate(
+            reports_total=Count('id'),
+            last_report_at=Max('created_at'),
+        )
+        .order_by('-last_report_at')
+    )
+    all_vacancy_ids = [row['vacancy_id'] for row in grouped_rows]
+    state_qs = VacancyModerationState.objects.filter(
+        moderator=request.user,
+        vacancy_id__in=all_vacancy_ids,
+    )
+    state_map = {state.vacancy_id: state for state in state_qs}
+
+    filtered_rows = []
+    for row in grouped_rows:
+        state_obj = state_map.get(row['vacancy_id'])
+        effective_status = (state_obj.status if state_obj else VacancyModerationState.STATUS_NEW)
+        if selected_review_status and effective_status != selected_review_status:
+            continue
+        filtered_rows.append(row)
+
+    vacancy_paginator = Paginator(filtered_rows, 20)
+    vacancy_page_obj = vacancy_paginator.get_page(request.GET.get('vacancy_page') or '1')
+
+    page_vacancy_ids = [row['vacancy_id'] for row in vacancy_page_obj.object_list]
+    page_reports = (
+        VacancyReport.objects
+        .select_related('vacancy', 'user', 'reviewed_by')
+        .filter(vacancy_id__in=page_vacancy_ids)
+        .order_by('-created_at')
+    )
+    reports_by_vacancy = {}
+    for rep in page_reports:
+        reports_by_vacancy.setdefault(rep.vacancy_id, []).append(rep)
+
+    reason_display_map = dict(VacancyReport.REASON_CHOICES)
+    moderation_status_map = dict(VacancyModerationState.STATUS_CHOICES)
+    vacancy_cards = []
+    for row in vacancy_page_obj.object_list:
+        vacancy_id = row['vacancy_id']
+        vacancy_reports = reports_by_vacancy.get(vacancy_id, [])
+        if not vacancy_reports:
+            continue
+        vacancy = vacancy_reports[0].vacancy
+
+        reason_counts = {}
+        for rep in vacancy_reports:
+            reason_counts[rep.reason_code] = reason_counts.get(rep.reason_code, 0) + 1
+        dominant_reason = 'Неизвестно'
+        if reason_counts:
+            sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
+            if len(sorted_reasons) == 1 or sorted_reasons[0][1] > sorted_reasons[1][1]:
+                dominant_reason = reason_display_map.get(sorted_reasons[0][0], sorted_reasons[0][0])
+
+        latest_report = vacancy_reports[0]
+        state_obj = state_map.get(vacancy_id)
+        effective_status = state_obj.status if state_obj else VacancyModerationState.STATUS_NEW
+        summary_status_label = moderation_status_map.get(effective_status, effective_status)
+        summary_note = (state_obj.note or '').strip() if state_obj else ''
+
+        compact_reports = []
+        for rep in vacancy_reports:
+            reporter = rep.user
+            full_name = (reporter.get_full_name() or '').strip()
+            reporter_name = full_name or reporter.username
+            avatar_url = ''
+            if hasattr(reporter, 'applicant') and reporter.applicant.avatar:
+                avatar_url = reporter.applicant.avatar.url
+            elif hasattr(reporter, 'manager') and reporter.manager.avatar:
+                avatar_url = reporter.manager.avatar.url
+            compact_reports.append({
+                'id': rep.pk,
+                'reporter_name': reporter_name,
+                'created_at': rep.created_at,
+                'reason_label': rep.get_reason_code_display(),
+                'reason_text': rep.reason_text,
+                'avatar_url': avatar_url,
+                'avatar_letter': (reporter_name[:1] or '?').upper(),
+            })
+
+        vacancy_cards.append({
+            'vacancy_id': vacancy.id,
+            'vacancy_external_id': vacancy.external_id,
+            'vacancy_title': vacancy.title,
+            'vacancy_company': vacancy.company,
+            'reports_total': row['reports_total'],
+            'last_report_at': row['last_report_at'],
+            'summary_status': effective_status,
+            'summary_status_label': summary_status_label,
+            'summary_note': summary_note,
+            'dominant_reason': dominant_reason,
+            'reports': compact_reports,
+        })
+
+    return render(request, 'accounts/moderator_analytics.html', {
+        'vacancy_cards': vacancy_cards,
+        'vacancy_page_obj': vacancy_page_obj,
+        'pending_count': pending_count,
+        'in_work_count': in_work_count,
+        'done_count': done_count,
+        'handled_count': handled_count,
+        'avg_reaction_minutes': avg_reaction_minutes,
+        'moderator_metrics_json': json.dumps(metrics_payload, ensure_ascii=False),
+        'peer_compare': compare,
+        'status_choices': VacancyReport.SELF_STATUS_CHOICES,
+        'review_status_choices': VacancyModerationState.STATUS_CHOICES,
+        'selected_review_status': selected_review_status,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
 #  Admin panel
 # ─────────────────────────────────────────────────────────────
 
@@ -1803,6 +2104,7 @@ def admin_panel(request):
         'total_users':      _User.objects.count(),
         'total_applicants': Applicant.objects.count(),
         'total_managers':   total_managers,
+        'total_moderators': Moderator.objects.count(),
         'total_vacancies':  Vacancy.objects.count(),
         'total_admins':     Administrator.objects.count(),
     }
@@ -1850,6 +2152,7 @@ def admin_panel(request):
     actor_label_map = {
         'system': 'Система',
         'admin': 'Администратор',
+        'moderator': 'Модератор',
         'manager': 'Менеджер',
         'applicant': 'Соискатель',
         'user': 'Пользователь',
@@ -1893,6 +2196,8 @@ def admin_panel(request):
 def _admin_user_role(user_obj):
     if is_admin_user(user_obj):
         return 'admin'
+    if is_moderator_user(user_obj):
+        return 'moderator'
     if hasattr(user_obj, 'manager'):
         return 'manager'
     if hasattr(user_obj, 'applicant'):
@@ -1902,17 +2207,21 @@ def _admin_user_role(user_obj):
 
 def _admin_set_user_role(target_user, new_role):
     """Set user role from admin panel while preserving contact data where possible."""
-    if new_role not in ('admin', 'manager', 'applicant'):
+    if new_role not in ('admin', 'moderator', 'manager', 'applicant'):
         return False, 'invalid_role'
 
     applicant = Applicant.objects.filter(user=target_user).first()
     manager = Manager.objects.filter(user=target_user).first()
+    moderator = Moderator.objects.filter(user=target_user).first()
 
     if new_role == 'admin':
         if not target_user.is_superuser:
             target_user.is_superuser = True
             target_user.save(update_fields=['is_superuser'])
         Administrator.objects.get_or_create(user=target_user)
+        Moderator.objects.filter(user=target_user).delete()
+        Manager.objects.filter(user=target_user).delete()
+        Applicant.objects.filter(user=target_user).delete()
         return True, 'role_updated'
 
     # Demote from admin when switching to business roles.
@@ -1920,6 +2229,25 @@ def _admin_set_user_role(target_user, new_role):
         target_user.is_superuser = False
         target_user.save(update_fields=['is_superuser'])
     Administrator.objects.filter(user=target_user).delete()
+
+    if new_role == 'moderator':
+        if moderator:
+            return True, 'role_updated'
+        moderator = Moderator(user=target_user)
+        if manager:
+            moderator.patronymic = manager.patronymic
+            moderator.phone = manager.phone
+            moderator.telegram = manager.telegram
+        elif applicant:
+            moderator.patronymic = applicant.patronymic
+            moderator.phone = applicant.phone
+            moderator.telegram = applicant.telegram
+        moderator.save()
+        Manager.objects.filter(user=target_user).delete()
+        Applicant.objects.filter(user=target_user).delete()
+        return True, 'role_updated'
+
+    Moderator.objects.filter(user=target_user).delete()
 
     if new_role == 'manager':
         if manager:
@@ -1936,6 +2264,10 @@ def _admin_set_user_role(target_user, new_role):
             if not applicant.was_manager:
                 applicant.was_manager = True
                 applicant.save(update_fields=['was_manager'])
+        elif moderator:
+            manager.patronymic = moderator.patronymic
+            manager.phone = moderator.phone
+            manager.telegram = moderator.telegram
         manager.save()
         return True, 'role_updated'
 
@@ -1943,9 +2275,17 @@ def _admin_set_user_role(target_user, new_role):
     applicant, _ = Applicant.objects.get_or_create(
         user=target_user,
         defaults={
-            'telegram': manager.telegram if manager and manager.telegram else f'@{target_user.username}',
-            'phone': manager.phone if manager else '',
-            'patronymic': manager.patronymic if manager else '',
+            'telegram': (
+                manager.telegram if manager and manager.telegram else (
+                    moderator.telegram if moderator and moderator.telegram else f'@{target_user.username}'
+                )
+            ),
+            'phone': (
+                manager.phone if manager else (moderator.phone if moderator else '')
+            ),
+            'patronymic': (
+                manager.patronymic if manager else (moderator.patronymic if moderator else '')
+            ),
             'city': '',
         },
     )
@@ -1964,6 +2304,175 @@ def _admin_set_user_role(target_user, new_role):
 
 
 @admin_required
+def admin_moderator_reports(request):
+    """Admin tab: list of moderator vacancy-deletion reports."""
+    from vacancies.models import ModeratorDeletionReport
+
+    status_filter = (request.GET.get('status') or 'all').strip()
+    qs = ModeratorDeletionReport.objects.select_related(
+        'moderator', 'manager', 'vacancy', 'restored_by'
+    ).prefetch_related('photos').order_by('-created_at')
+    if status_filter == 'active':
+        qs = qs.filter(is_restored=False)
+    elif status_filter == 'restored':
+        qs = qs.filter(is_restored=True)
+
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page') or '1')
+
+    return render(request, 'accounts/admin_moderator_reports.html', {
+        'page_obj': page_obj,
+        'status_filter': status_filter,
+        'total_reports': ModeratorDeletionReport.objects.count(),
+        'total_active': ModeratorDeletionReport.objects.filter(is_restored=False).count(),
+        'total_restored': ModeratorDeletionReport.objects.filter(is_restored=True).count(),
+    })
+
+
+@admin_required
+def admin_moderator_report_pdf(request, report_id):
+    """Generate a PDF document for a moderator deletion report."""
+    from io import BytesIO
+    from vacancies.models import ModeratorDeletionReport
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle,
+    )
+    from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    report = get_object_or_404(
+        ModeratorDeletionReport.objects.prefetch_related('photos'),
+        pk=report_id,
+    )
+
+    # Register a Unicode TTF font so the PDF can render Cyrillic properly.
+    # Windows ships DejaVuSans via matplotlib, but safe-fallback: try a system font.
+    font_name = 'DejaVuSans'
+    try:
+        candidates = [
+            os.path.join(os.environ.get('WINDIR', 'C:/Windows'), 'Fonts', 'arial.ttf'),
+            os.path.join(os.environ.get('WINDIR', 'C:/Windows'), 'Fonts', 'ARIAL.TTF'),
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        ]
+        font_path = next((p for p in candidates if os.path.exists(p)), None)
+        if font_path:
+            pdfmetrics.registerFont(TTFont(font_name, font_path))
+        else:
+            font_name = 'Helvetica'
+    except Exception:
+        font_name = 'Helvetica'
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=18*mm, rightMargin=18*mm,
+        topMargin=16*mm, bottomMargin=16*mm,
+        title=f'Moderator report #{report.pk}',
+    )
+
+    base = getSampleStyleSheet()['Normal']
+    p_title = ParagraphStyle('t', parent=base, fontName=font_name, fontSize=16, leading=20, spaceAfter=8)
+    p_h2    = ParagraphStyle('h2', parent=base, fontName=font_name, fontSize=13, leading=16, textColor=colors.HexColor('#1f3b70'), spaceBefore=10, spaceAfter=4)
+    p_body  = ParagraphStyle('b', parent=base, fontName=font_name, fontSize=10, leading=14, alignment=TA_LEFT)
+    p_small = ParagraphStyle('s', parent=base, fontName=font_name, fontSize=9, leading=12, textColor=colors.HexColor('#555555'))
+
+    story = []
+    story.append(Paragraph(f'Отчёт №{report.pk} — удаление вакансии', p_title))
+    story.append(Paragraph(
+        f'Создан: {report.created_at.strftime("%d.%m.%Y %H:%M")}'
+        + (f' · Восстановлен: {report.restored_at.strftime("%d.%m.%Y %H:%M")}' if report.is_restored and report.restored_at else ''),
+        p_small,
+    ))
+
+    story.append(Paragraph('Вакансия', p_h2))
+    vac_rows = [
+        ['Название',      report.vacancy_title or '—'],
+        ['Компания',      report.vacancy_company or '—'],
+        ['ID',            report.vacancy_external_id or '—'],
+        ['Жалоб от пользователей', str(report.reports_count)],
+        ['Доминирующий тег', report.dominant_reason_label or '—'],
+    ]
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f2f4f8')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#c9d1e2')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#dee3ed')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ])
+    t = Table(
+        [[Paragraph(k, p_body), Paragraph(str(v), p_body)] for k, v in vac_rows],
+        colWidths=[55*mm, 115*mm],
+    )
+    t.setStyle(table_style)
+    story.append(t)
+
+    if report.vacancy_description:
+        story.append(Paragraph('Описание вакансии', p_h2))
+        # strip HTML tags for safety
+        text = re.sub(r'<[^>]+>', ' ', report.vacancy_description or '')
+        text = re.sub(r'\s+', ' ', text).strip()
+        if len(text) > 4000:
+            text = text[:4000] + '…'
+        story.append(Paragraph(text or '—', p_body))
+
+    story.append(Paragraph('Менеджер вакансии', p_h2))
+    mgr_rows = [
+        ['ФИО',   report.manager_full_name or '—'],
+        ['Email', report.manager_email or '—'],
+    ]
+    t2 = Table([[Paragraph(k, p_body), Paragraph(str(v), p_body)] for k, v in mgr_rows], colWidths=[55*mm, 115*mm])
+    t2.setStyle(table_style)
+    story.append(t2)
+
+    story.append(Paragraph('Удаление', p_h2))
+    del_rows = [
+        ['Модератор',      report.moderator_full_name or '—'],
+        ['Email',          report.moderator_email or '—'],
+        ['Дата удаления',  report.created_at.strftime('%d.%m.%Y %H:%M')],
+        ['Статус',         'Восстановлено' if report.is_restored else 'Активно'],
+        ['Причина',        report.reason or '—'],
+    ]
+    t3 = Table([[Paragraph(k, p_body), Paragraph(str(v).replace('\n', '<br/>'), p_body)] for k, v in del_rows], colWidths=[55*mm, 115*mm])
+    t3.setStyle(table_style)
+    story.append(t3)
+
+    photos = list(report.photos.all())
+    if photos:
+        story.append(Paragraph('Фото-доказательства', p_h2))
+        row = []
+        for idx, ph in enumerate(photos):
+            try:
+                img = Image(ph.image.path, width=80*mm, height=55*mm, kind='proportional')
+                row.append(img)
+            except Exception:
+                continue
+            if len(row) == 2:
+                story.append(Table([row], colWidths=[85*mm, 85*mm]))
+                story.append(Spacer(1, 4*mm))
+                row = []
+        if row:
+            story.append(Table([row + [''] * (2 - len(row))], colWidths=[85*mm, 85*mm]))
+    else:
+        story.append(Paragraph('Фото-доказательства не предоставлены.', p_small))
+
+    doc.build(story)
+
+    pdf_bytes = buf.getvalue()
+    filename = f'moderator-report-{report.pk}.pdf'
+    resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+    resp['Content-Disposition'] = f'inline; filename="{filename}"'
+    return resp
+
+
+@admin_required
 def admin_users(request):
     """Admin page to manage users: list/paginate/edit contacts/delete/switch role."""
     q = (request.GET.get('q') or '').strip()
@@ -1973,10 +2482,13 @@ def admin_users(request):
         'saved': 'Данные пользователя сохранены.',
         'deleted': 'Пользователь удален.',
         'role_changed': 'Роль пользователя изменена.',
+        'moderator_created': 'Модератор успешно создан.',
         'invalid_user': 'Некорректный идентификатор пользователя.',
         'not_found': 'Пользователь не найден.',
         'cannot_delete_self': 'Нельзя удалить собственный аккаунт.',
         'email_exists': 'Пользователь с таким email уже существует.',
+        'username_exists': 'Пользователь с таким логином уже существует.',
+        'missing_fields': 'Заполните обязательные поля для создания модератора.',
         'telegram_exists': 'Пользователь с таким Telegram уже существует.',
         'invalid_telegram': 'Telegram должен начинаться с @.',
         'invalid_role': 'Недопустимая роль.',
@@ -1994,6 +2506,56 @@ def admin_users(request):
 
     if request.method == 'POST':
         action = (request.POST.get('action') or '').strip()
+
+        if action == 'create_moderator':
+            username = (request.POST.get('new_moderator_username') or '').strip()
+            email = (request.POST.get('new_moderator_email') or '').strip().lower()
+            password = (request.POST.get('new_moderator_password') or '').strip()
+            first_name = (request.POST.get('new_moderator_first_name') or '').strip()
+            last_name = (request.POST.get('new_moderator_last_name') or '').strip()
+            patronymic = (request.POST.get('new_moderator_patronymic') or '').strip()
+            phone = (request.POST.get('new_moderator_phone') or '').strip()
+            telegram = ''
+
+            if not username or not email or not password:
+                return _redirect_with_status('missing_fields')
+            if User.objects.filter(username__iexact=username).exists():
+                return _redirect_with_status('username_exists')
+            if User.objects.filter(email__iexact=email).exists():
+                return _redirect_with_status('email_exists')
+            if telegram and not telegram.startswith('@'):
+                return _redirect_with_status('invalid_telegram')
+            if telegram and (
+                Applicant.objects.filter(telegram__iexact=telegram).exists()
+                or Manager.objects.filter(telegram__iexact=telegram).exists()
+                or Moderator.objects.filter(telegram__iexact=telegram).exists()
+            ):
+                return _redirect_with_status('telegram_exists')
+
+            new_user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            Moderator.objects.create(
+                user=new_user,
+                patronymic=patronymic,
+                phone=phone,
+                telegram=telegram,
+            )
+            _log_api_action(
+                request,
+                action='admin_user_role_change',
+                before={'create': 'moderator', 'username': username},
+                after={'user_id': new_user.pk, 'role': 'moderator'},
+                success=True,
+                status_code=200,
+                endpoint='admin_users',
+            )
+            return _redirect_with_status('moderator_created')
+
         try:
             user_id = int(request.POST.get('user_id') or '0')
         except ValueError:
@@ -2013,6 +2575,7 @@ def admin_users(request):
             Applicant.objects.filter(user=target_user).delete()
             Manager.objects.filter(user=target_user).delete()
             Administrator.objects.filter(user=target_user).delete()
+            Moderator.objects.filter(user=target_user).delete()
             target_user.delete()
             _log_api_action(
                 request,
@@ -2060,6 +2623,7 @@ def admin_users(request):
 
             applicant = Applicant.objects.filter(user=target_user).first()
             manager = Manager.objects.filter(user=target_user).first()
+            moderator = Moderator.objects.filter(user=target_user).first()
 
             if applicant:
                 app_updates = []
@@ -2076,7 +2640,7 @@ def admin_users(request):
 
             # For non-admin users, allow editing manager fields in the same form
             # even if they did not have a manager profile yet.
-            if (not is_admin_user(target_user)) and not manager:
+            if (not is_admin_user(target_user)) and (not is_moderator_user(target_user)) and not manager:
                 manager = Manager.objects.create(
                     user=target_user,
                     patronymic=patronymic,
@@ -2096,6 +2660,16 @@ def admin_users(request):
                 manager.company = company
                 mgr_updates.append('company')
                 manager.save(update_fields=mgr_updates)
+
+            if moderator:
+                mod_updates = []
+                moderator.patronymic = patronymic
+                mod_updates.append('patronymic')
+                moderator.phone = phone
+                mod_updates.append('phone')
+                moderator.telegram = telegram or moderator.telegram
+                mod_updates.append('telegram')
+                moderator.save(update_fields=mod_updates)
 
             _log_api_action(
                 request,
@@ -2134,7 +2708,7 @@ def admin_users(request):
 
         return _redirect_with_status('unknown_action')
 
-    users_qs = User.objects.select_related('applicant', 'manager').order_by('-date_joined')
+    users_qs = User.objects.select_related('applicant', 'manager', 'moderator_profile').order_by('-date_joined')
     if q:
         users_qs = users_qs.filter(
             Q(username__icontains=q)
@@ -2145,6 +2719,7 @@ def admin_users(request):
             | Q(manager__phone__icontains=q)
             | Q(applicant__telegram__icontains=q)
             | Q(manager__telegram__icontains=q)
+            | Q(moderator_profile__telegram__icontains=q)
         ).distinct()
 
     paginator = Paginator(users_qs, 20)
@@ -2154,9 +2729,11 @@ def admin_users(request):
     for u in page_obj.object_list:
         applicant = getattr(u, 'applicant', None)
         manager = getattr(u, 'manager', None)
+        moderator = getattr(u, 'moderator_profile', None)
         role = _admin_user_role(u)
         role_label = {
             'admin': 'Администратор',
+            'moderator': 'Модератор',
             'manager': 'Менеджер',
             'applicant': 'Соискатель',
             'user': 'Пользователь',
@@ -2168,9 +2745,21 @@ def admin_users(request):
             'first_name': u.first_name,
             'last_name': u.last_name,
             'email': u.email,
-            'patronymic': (applicant.patronymic if applicant else (manager.patronymic if manager else '')),
-            'phone': (applicant.phone if applicant else (manager.phone if manager else '')),
-            'telegram': (applicant.telegram if applicant else (manager.telegram if manager else '')),
+            'patronymic': (
+                applicant.patronymic if applicant else (
+                    manager.patronymic if manager else (moderator.patronymic if moderator else '')
+                )
+            ),
+            'phone': (
+                applicant.phone if applicant else (
+                    manager.phone if manager else (moderator.phone if moderator else '')
+                )
+            ),
+            'telegram': (
+                applicant.telegram if applicant else (
+                    manager.telegram if manager else (moderator.telegram if moderator else '')
+                )
+            ),
             'city': (applicant.city if applicant else ''),
             'company': (manager.company if manager else ''),
             'is_self': (u.pk == request.user.pk),
@@ -3370,10 +3959,11 @@ def api_calendar_events(request):
         return JsonResponse({'error': 'invalid_date'}, status=400)
 
     is_admin = is_admin_user(request.user)
-    is_mgr   = (not is_admin) and hasattr(request.user, 'manager')
+    is_mod   = is_moderator_user(request.user)
+    is_mgr   = (not is_admin and not is_mod) and hasattr(request.user, 'manager')
     events   = []
 
-    if not is_admin:
+    if not is_admin and not is_mod:
         if is_mgr:
             # ─ Applications on manager's vacancies ───────────────
             apps_qs = (
@@ -3493,7 +4083,7 @@ def api_calendar_events(request):
         if color not in month_marks[d_str]:
             month_marks[d_str].append(color)
 
-    if not is_admin:
+    if not is_admin and not is_mod:
         if is_mgr:
             for a in Application.objects.filter(
                 vacancy__created_by=request.user,

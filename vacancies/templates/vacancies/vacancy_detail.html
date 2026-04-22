@@ -276,6 +276,17 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% if can_report_vacancy %}
+                <div class="sidebar-card" id="report-card">
+                    {% if has_reported_vacancy %}
+                        <div class="apply-status apply-status--viewed">✅ Жалоба уже отправлена</div>
+                        <p class="vd-side-note vd-side-note--tight">Вы можете отправить только одну жалобу на эту вакансию.</p>
+                    {% else %}
+                        <button class="btn-apply" id="btn-report-vacancy">Пожаловаться на вакансию</button>
+                        <p class="vd-side-note">Жалоба отправится модератору для проверки.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
                 {% endif %}
 
                 {% if application_count %}
@@ -729,7 +740,6 @@
         var pollCount = 0;
         var delay = 400;  /* start fast, back off exponentially */
         var descBody = document.getElementById('desc-body');
-
         function renderDescription(data) {
             if (data.branded) {
                 // Use iframe for branded content — full <style> isolation
@@ -840,6 +850,87 @@
                 btnSend.disabled = false;
                 errEl.textContent = 'Сетевая ошибка.';
                 errEl.style.display = '';
+            });
+        });
+    })();
+    </script>
+    {% endif %}
+
+    {% if can_report_vacancy and not has_reported_vacancy %}
+    <div id="report-modal-overlay" class="report-modal-overlay" style="display:none">
+        <div id="report-modal" class="report-modal">
+            <h3>Жалоба на вакансию</h3>
+            <p class="vd-apply-sub">{{ vacancy.title }} — {{ vacancy.company }}</p>
+            <label class="report-label" for="report-reason-code">Причина</label>
+            <select id="report-reason-code" class="report-input">
+                {% for code, label in report_reason_choices %}
+                <option value="{{ code }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label class="report-label" for="report-reason-text">Комментарий</label>
+            <textarea id="report-reason-text" class="report-input" placeholder="Опишите причину (обязательно для пункта “Другое”)…" maxlength="1500"></textarea>
+            <div class="apply-modal-actions">
+                <button class="btn" id="report-cancel">Отмена</button>
+                <button class="btn-primary" id="report-submit">Отправить жалобу</button>
+            </div>
+            <div id="report-error" class="vd-apply-error"></div>
+        </div>
+    </div>
+    <script>
+    (function(){
+        var overlay = document.getElementById('report-modal-overlay');
+        var openBtn = document.getElementById('btn-report-vacancy');
+        var closeBtn = document.getElementById('report-cancel');
+        var submitBtn = document.getElementById('report-submit');
+        var reasonCode = document.getElementById('report-reason-code');
+        var reasonText = document.getElementById('report-reason-text');
+        var errorEl = document.getElementById('report-error');
+        if (!overlay || !openBtn) return;
+
+        function closeModal(){ overlay.style.display = 'none'; }
+        function openModal(){ overlay.style.display = 'flex'; }
+
+        openBtn.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', function(e){ if (e.target === overlay) closeModal(); });
+
+        submitBtn.addEventListener('click', function(){
+            submitBtn.disabled = true;
+            errorEl.style.display = 'none';
+            var payload = {
+                reason_code: reasonCode.value,
+                reason_text: reasonText.value.trim()
+            };
+            fetch('{% url "vacancy-report" vacancy.pk %}', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify(payload)
+            }).then(function(r){ return r.json(); })
+            .then(function(d){
+                submitBtn.disabled = false;
+                if (d.ok) {
+                    closeModal();
+                    var card = document.getElementById('report-card');
+                    if (card) {
+                        card.innerHTML =
+                            '<div class="apply-status apply-status--viewed">✅ Жалоба уже отправлена</div>' +
+                            '<p class="vd-side-note vd-side-note--tight">Вы можете отправить только одну жалобу на эту вакансию.</p>';
+                    }
+                    return;
+                }
+                if (d.error === 'reason_text_required') {
+                    errorEl.textContent = 'Для причины "Другое" нужно добавить комментарий.';
+                } else if (d.error === 'invalid_reason_code') {
+                    errorEl.textContent = 'Выберите корректную причину.';
+                } else {
+                    errorEl.textContent = 'Не удалось отправить жалобу.';
+                }
+                errorEl.style.display = '';
+            }).catch(function(){
+                submitBtn.disabled = false;
+                errorEl.textContent = 'Сетевая ошибка.';
+                errorEl.style.display = '';
             });
         });
     })();

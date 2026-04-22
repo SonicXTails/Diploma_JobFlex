@@ -1,0 +1,146 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>JobFlex — Отчёты модераторов</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>(function(){try{var s=localStorage.getItem('site_theme');if(s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('theme-dark');}catch(e){}})();</script>
+    <link rel="stylesheet" href="{% static 'vacancies/css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
+    <link rel="stylesheet" href="{% static 'accounts/css/admin-panel.css' %}">
+    <link rel="stylesheet" href="{% static 'accounts/css/moderator-analytics.css' %}">
+</head>
+<body data-authenticated="1" data-user-role="admin">
+<header class="site-header">
+    <div class="container header-inner">
+        <a href="/" class="logo">
+            <img src="{% static 'vacancies/logo.png' %}" alt="JobFlex" class="logo-img">
+            <span class="logo-text">JobFlex</span>
+        </a>
+        <div class="header-actions">
+            <a class="btn-link" href="{% url 'accounts:admin_panel' %}">← Назад в панель</a>
+            <a class="btn" href="{% url 'accounts:logout' %}">Выйти</a>
+        </div>
+    </div>
+</header>
+
+<main class="container container--wide adm-page">
+    <h1 class="adm-section-title" style="margin-top:24px">🗂 Отчёты модераторов</h1>
+    <p class="mod-muted">Журнал удалений вакансий модераторами. Администратор может просматривать отчёт,
+        скачать PDF и восстановить вакансию, если удаление было ошибочным.</p>
+
+    <div class="mod-stats" style="margin:16px 0 24px">
+        <div class="mod-stat"><strong>{{ total_reports }}</strong><span>Всего отчётов</span></div>
+        <div class="mod-stat"><strong>{{ total_active }}</strong><span>Активных (вакансия скрыта)</span></div>
+        <div class="mod-stat"><strong>{{ total_restored }}</strong><span>Восстановлено админом</span></div>
+    </div>
+
+    <form method="get" class="mod-filter-bar" style="margin-bottom:18px">
+        <label for="status-filter">Фильтр:</label>
+        <select id="status-filter" class="mod-input" name="status" onchange="this.form.submit()">
+            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Все</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Только активные</option>
+            <option value="restored" {% if status_filter == 'restored' %}selected{% endif %}>Только восстановленные</option>
+        </select>
+    </form>
+
+    {% if page_obj.object_list %}
+        {% for r in page_obj.object_list %}
+        <article class="mod-vacancy-card mod-del-card" data-report-id="{{ r.id }}">
+            <div class="mod-report-head">
+                <div>
+                    <strong>{{ r.vacancy_title|default:"— без названия —" }}</strong>
+                    <div class="mod-muted">
+                        {{ r.vacancy_company|default:"—" }} · удалено {{ r.created_at|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+                <div class="mod-del-actions">
+                    <a class="mod-btn-open" target="_blank" rel="noopener"
+                       href="{% url 'accounts:admin_moderator_report_pdf' r.id %}">📄 Скачать PDF</a>
+                    {% if not r.is_restored %}
+                        <button class="mod-btn-open js-restore-report" data-report-id="{{ r.id }}" type="button">↺ Восстановить</button>
+                    {% else %}
+                        <span class="mod-pill mod-pill--ok">Восстановлено {{ r.restored_at|date:"d.m.Y H:i" }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="mod-vacancy-meta">
+                <span class="mod-pill">Модератор: <b>{{ r.moderator_full_name|default:"—" }}</b></span>
+                <span class="mod-pill">Менеджер: <b>{{ r.manager_full_name|default:"—" }}</b></span>
+                <span class="mod-pill">Жалоб: <b>{{ r.reports_count }}</b></span>
+                <span class="mod-pill">Тег жалоб: <b>{{ r.dominant_reason_label|default:"—" }}</b></span>
+                {% if r.is_restored %}
+                    <span class="mod-pill mod-pill--ok">Статус: восстановлено</span>
+                {% else %}
+                    <span class="mod-pill mod-pill--warn">Статус: удалено</span>
+                {% endif %}
+            </div>
+            <div class="mod-del-reason">
+                <b>Причина:</b> {{ r.reason|linebreaksbr }}
+            </div>
+            {% if r.photos.all %}
+            <div class="mod-del-photos">
+                {% for p in r.photos.all %}
+                    <a href="{{ p.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ p.image.url }}" alt="Фото-доказательство {{ forloop.counter }}">
+                    </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if r.vacancy_description %}
+            <details class="mod-del-desc">
+                <summary>Описание вакансии (снапшот)</summary>
+                <div>{{ r.vacancy_description|linebreaksbr }}</div>
+            </details>
+            {% endif %}
+        </article>
+        {% endfor %}
+
+        <div class="mod-pager">
+            {% if page_obj.has_previous %}
+            <a href="?status={{ status_filter }}&page={{ page_obj.previous_page_number }}">← Назад</a>
+            {% endif %}
+            <span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+            <a href="?status={{ status_filter }}&page={{ page_obj.next_page_number }}">Вперёд →</a>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="mod-empty">Отчётов пока нет.</p>
+    {% endif %}
+</main>
+
+<script>
+(function(){
+    function _csrf(){ var m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+    document.querySelectorAll('.js-restore-report').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var id = btn.getAttribute('data-report-id');
+            if (!confirm('Восстановить вакансию? Она снова станет видна всем пользователям.')) return;
+            btn.disabled = true;
+            fetch('/api/admin/moderator-report/' + id + '/restore/', {
+                method: 'POST',
+                headers: {'X-CSRFToken': _csrf()},
+                credentials: 'same-origin',
+            }).then(function(r){ return r.json().then(function(d){ return {status: r.status, data: d}; }); })
+            .then(function(resp){
+                if (resp.data && resp.data.ok){
+                    window.location.reload();
+                } else {
+                    var msg = (resp.data && resp.data.detail) || 'Не удалось восстановить вакансию.';
+                    alert(msg);
+                    btn.disabled = false;
+                }
+            }).catch(function(){
+                alert('Сетевая ошибка.');
+                btn.disabled = false;
+            });
+        });
+    });
+})();
+</script>
+</body>
+</html>
