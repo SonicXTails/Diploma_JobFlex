@@ -33,6 +33,7 @@
     <div class="adm-tabs">
         <button class="adm-tab-btn active" data-tab="panel">🏠 Панель</button>
         <button class="adm-tab-btn" data-tab="calendar">📅 Календарь</button>
+        <button class="adm-tab-btn" data-tab="suggestions">💡 Предложения</button>
     </div>
 
     <!-- Tab: Admin panel -->
@@ -234,6 +235,176 @@
     </details>
 
     </div><!-- /#adm-tab-panel -->
+
+    <!-- Tab: Suggestions -->
+    <div id="adm-tab-suggestions" style="display:none">
+        <div class="adm-suggest-head">
+            <p class="adm-section-title" style="margin:0">Предложения и критика пользователей</p>
+            <p class="adm-suggest-sub">Показываются сообщения от всех ролей, кроме администраторов и модераторов.</p>
+        </div>
+
+        {% for group in suggestion_metric_groups %}
+        <section class="adm-suggest-metric-group">
+            <h3 class="adm-suggest-metric-group__title">{{ group.title }}</h3>
+            <div class="adm-suggest-metrics">
+                {% for metric in group.metrics %}
+                <div class="adm-suggest-metric">
+                    <div class="adm-suggest-metric__value">{{ metric.value }}</div>
+                    <div class="adm-suggest-metric__title">{{ metric.title }}</div>
+                    <div class="adm-suggest-metric__hint">{{ metric.hint }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+
+        <div class="adm-suggest-pie-grid">
+            <div class="adm-suggest-pie-card">
+                <div class="adm-suggest-pie-card__top">
+                    <h3>Активность по действиям</h3>
+                    <p>Сравнение ключевых действий пользователей: просмотры, закладки, отклики, жалобы и предложения.</p>
+                </div>
+                <div class="adm-suggest-pie-card__body">
+                    <div class="adm-suggest-pie-card__right">
+                        <div class="adm-suggest-pie" style="background:conic-gradient({{ suggestion_pie_conic }})">
+                            <span>{{ suggestion_pie_total }}</span>
+                        </div>
+                    </div>
+                    <div class="adm-suggest-pie-legend">
+                        {% for seg in suggestion_pie_segments %}
+                        <div class="adm-suggest-pie-legend__item">
+                            <span class="adm-suggest-pie-legend__dot" style="background:{{ seg.legend_bg }}"></span>
+                            <span class="adm-suggest-pie-legend__label">{{ seg.label }}</span>
+                            <span class="adm-suggest-pie-legend__val">{{ seg.value }} ({{ seg.pct }}%)</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="adm-suggest-pie-card">
+                <div class="adm-suggest-pie-card__top">
+                    <h3>Статусы предложений</h3>
+                    <p>Показывает распределение сообщений по текущему этапу обработки администраторами.</p>
+                </div>
+                <div class="adm-suggest-pie-card__body">
+                    <div class="adm-suggest-pie-card__right">
+                        <div class="adm-suggest-pie" style="background:conic-gradient({{ feedback_status_conic }})">
+                            <span>{{ feedback_status_total }}</span>
+                        </div>
+                    </div>
+                    <div class="adm-suggest-pie-legend">
+                        {% for seg in feedback_status_segments %}
+                        <div class="adm-suggest-pie-legend__item">
+                            <span class="adm-suggest-pie-legend__dot" style="background:{{ seg.legend_bg }}"></span>
+                            <span class="adm-suggest-pie-legend__label">{{ seg.label }}</span>
+                            <span class="adm-suggest-pie-legend__val">{{ seg.value }} ({{ seg.pct }}%)</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="adm-suggest-feed">
+            <div class="adm-suggest-feed__top">
+                <h3 class="adm-suggest-feed__title">Лента сообщений</h3>
+                <span class="adm-suggest-feed__meta">Реализовано: <b id="adm-feedback-resolved-count">{{ feedback_resolved_count }}</b></span>
+            </div>
+
+            <div class="adm-suggest-subtabs">
+                <button class="adm-suggest-subtab is-active" data-feedback-tab="active">Лента</button>
+                <button class="adm-suggest-subtab" data-feedback-tab="archived">Архив</button>
+            </div>
+
+            <div class="adm-suggest-filters">
+                <select id="adm-feedback-filter-kind">
+                    <option value="all">Все типы</option>
+                    <option value="suggestion">Только предложения</option>
+                    <option value="criticism">Только критика</option>
+                </select>
+                <select id="adm-feedback-filter-role">
+                    <option value="all">Все роли</option>
+                    <option value="applicant">Соискатели</option>
+                    <option value="manager">Менеджеры</option>
+                    <option value="user">Пользователи</option>
+                </select>
+                <input id="adm-feedback-search" type="search" placeholder="Поиск по тексту и автору...">
+                <button type="button" id="adm-feedback-filter-reset">Сбросить</button>
+            </div>
+
+            <div id="adm-feedback-pane-active" class="adm-feedback-pane">
+                {% if feedback_active_items %}
+                    {% for item in feedback_active_items %}
+                    <article class="adm-suggest-item"
+                             data-feedback-id="{{ item.id }}"
+                             data-feedback-kind="{{ item.kind_code }}"
+                             data-feedback-role="{{ item.role_code }}"
+                             data-feedback-search="{{ item.author|lower }} {{ item.message|lower }}">
+                        <div class="adm-suggest-item__avatar-wrap">
+                            {% if item.avatar_url %}
+                                <img src="{{ item.avatar_url }}" alt="{{ item.author }}" class="adm-suggest-item__avatar">
+                            {% else %}
+                                <span class="adm-suggest-item__avatar adm-suggest-item__avatar--fallback">{{ item.fallback_letter }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="adm-suggest-item__body">
+                            <div class="adm-suggest-item__head">
+                                <strong>{{ item.author }}</strong>
+                                <span class="adm-suggest-item__role">{{ item.role_label }}</span>
+                                <span class="adm-suggest-item__kind adm-suggest-item__kind--{{ item.kind_code }}">{{ item.kind }}</span>
+                                <span class="adm-suggest-item__time">{{ item.created_at|date:"d.m.Y H:i" }}</span>
+                            </div>
+                            <p class="adm-suggest-item__text">{{ item.message|linebreaksbr }}</p>
+                            <div class="adm-suggest-item__actions">
+                                <button class="adm-feedback-action" data-feedback-action="archive">Реализовать потом</button>
+                                <button class="adm-feedback-action adm-feedback-action--danger" data-feedback-action="reject">Отклонить</button>
+                                <button class="adm-feedback-action adm-feedback-action--ok" data-feedback-action="resolve">Реализовано</button>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                    <p class="adm-suggest-empty">Пока нет сообщений в ленте.</p>
+                {% endif %}
+            </div>
+
+            <div id="adm-feedback-pane-archived" class="adm-feedback-pane" style="display:none">
+                {% if feedback_archived_items %}
+                    {% for item in feedback_archived_items %}
+                    <article class="adm-suggest-item"
+                             data-feedback-id="{{ item.id }}"
+                             data-feedback-kind="{{ item.kind_code }}"
+                             data-feedback-role="{{ item.role_code }}"
+                             data-feedback-search="{{ item.author|lower }} {{ item.message|lower }}">
+                        <div class="adm-suggest-item__avatar-wrap">
+                            {% if item.avatar_url %}
+                                <img src="{{ item.avatar_url }}" alt="{{ item.author }}" class="adm-suggest-item__avatar">
+                            {% else %}
+                                <span class="adm-suggest-item__avatar adm-suggest-item__avatar--fallback">{{ item.fallback_letter }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="adm-suggest-item__body">
+                            <div class="adm-suggest-item__head">
+                                <strong>{{ item.author }}</strong>
+                                <span class="adm-suggest-item__role">{{ item.role_label }}</span>
+                                <span class="adm-suggest-item__kind adm-suggest-item__kind--{{ item.kind_code }}">{{ item.kind }}</span>
+                                <span class="adm-suggest-item__time">{{ item.created_at|date:"d.m.Y H:i" }}</span>
+                            </div>
+                            <p class="adm-suggest-item__text">{{ item.message|linebreaksbr }}</p>
+                            <div class="adm-suggest-item__actions">
+                                <button class="adm-feedback-action" data-feedback-action="restore">Вернуть в ленту</button>
+                                <button class="adm-feedback-action adm-feedback-action--danger" data-feedback-action="reject">Отклонить</button>
+                                <button class="adm-feedback-action adm-feedback-action--ok" data-feedback-action="resolve">Реализовано</button>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                    <p class="adm-suggest-empty">Архив пуст.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div><!-- /#adm-tab-suggestions -->
 
     <!-- Tab: Calendar -->
     <div id="adm-tab-calendar" style="display:none">
@@ -584,6 +755,7 @@ animateAdminStats();
     var panels = {
         panel:    document.getElementById('adm-tab-panel'),
         calendar: document.getElementById('adm-tab-calendar'),
+        suggestions: document.getElementById('adm-tab-suggestions'),
     };
     tabs.forEach(function(btn){
         btn.addEventListener('click', function(){
@@ -595,6 +767,123 @@ animateAdminStats();
             if(target === 'calendar') window.calRender && window.calRender();
         });
     });
+})();
+
+/* ════════════════════════════════════════════════════════
+   Suggestions workflow: filters + actions + archive
+════════════════════════════════════════════════════════ */
+(function(){
+    var tabBtns = document.querySelectorAll('.adm-suggest-subtab');
+    var paneActive = document.getElementById('adm-feedback-pane-active');
+    var paneArchived = document.getElementById('adm-feedback-pane-archived');
+    if (!paneActive || !paneArchived) return;
+
+    var kindSelect = document.getElementById('adm-feedback-filter-kind');
+    var roleSelect = document.getElementById('adm-feedback-filter-role');
+    var searchInput = document.getElementById('adm-feedback-search');
+    var resetBtn = document.getElementById('adm-feedback-filter-reset');
+    var resolvedCounter = document.getElementById('adm-feedback-resolved-count');
+    var currentPane = 'active';
+
+    function _csrf(){ var m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+    function getPane(){ return currentPane === 'archived' ? paneArchived : paneActive; }
+    function getItems(){ return Array.from(getPane().querySelectorAll('.adm-suggest-item')); }
+    function getEmptyNode(pane){
+        var node = pane.querySelector('.adm-suggest-empty');
+        if (!node){
+            node = document.createElement('p');
+            node.className = 'adm-suggest-empty';
+            node.textContent = 'Нет сообщений по текущим фильтрам.';
+            pane.appendChild(node);
+        }
+        return node;
+    }
+    function applyFilters(){
+        var kind = (kindSelect && kindSelect.value) || 'all';
+        var role = (roleSelect && roleSelect.value) || 'all';
+        var q = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+        var items = getItems();
+        var visible = 0;
+        items.forEach(function(item){
+            var k = item.getAttribute('data-feedback-kind') || '';
+            var r = item.getAttribute('data-feedback-role') || '';
+            var s = (item.getAttribute('data-feedback-search') || '').toLowerCase();
+            var okKind = (kind === 'all') || (k === kind);
+            var okRole = (role === 'all') || (r === role);
+            var okSearch = !q || (s.indexOf(q) !== -1);
+            var show = okKind && okRole && okSearch;
+            item.style.display = show ? '' : 'none';
+            if (show) visible += 1;
+        });
+        var emptyNode = getEmptyNode(getPane());
+        emptyNode.style.display = visible === 0 ? '' : 'none';
+    }
+    function switchPane(next){
+        currentPane = next;
+        paneActive.style.display = next === 'active' ? '' : 'none';
+        paneArchived.style.display = next === 'archived' ? '' : 'none';
+        tabBtns.forEach(function(btn){
+            btn.classList.toggle('is-active', btn.getAttribute('data-feedback-tab') === next);
+        });
+        applyFilters();
+    }
+    tabBtns.forEach(function(btn){
+        btn.addEventListener('click', function(){
+            switchPane(btn.getAttribute('data-feedback-tab') || 'active');
+        });
+    });
+    if (kindSelect) kindSelect.addEventListener('change', applyFilters);
+    if (roleSelect) roleSelect.addEventListener('change', applyFilters);
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function(){
+            if (kindSelect) kindSelect.value = 'all';
+            if (roleSelect) roleSelect.value = 'all';
+            if (searchInput) searchInput.value = '';
+            applyFilters();
+        });
+    }
+
+    function postAction(item, action, btn){
+        var id = item.getAttribute('data-feedback-id');
+        if (!id) return;
+        btn.disabled = true;
+        fetch('/accounts/api/admin/feedback/' + id + '/action/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': _csrf()},
+            credentials: 'same-origin',
+            body: new URLSearchParams({action: action}),
+        }).then(function(r){ return r.json().then(function(d){ return {status: r.status, data: d}; }); })
+        .then(function(resp){
+            if (resp.status >= 200 && resp.status < 300 && resp.data && resp.data.ok){
+                if (action === 'resolve' && resolvedCounter){
+                    var cur = parseInt(resolvedCounter.textContent || '0', 10);
+                    if (!isNaN(cur)) resolvedCounter.textContent = String(cur + 1);
+                }
+                item.remove();
+                applyFilters();
+            } else {
+                btn.disabled = false;
+                alert((resp.data && resp.data.detail) || 'Не удалось обновить сообщение.');
+            }
+        }).catch(function(){
+            btn.disabled = false;
+            alert('Сетевая ошибка.');
+        });
+    }
+
+    [paneActive, paneArchived].forEach(function(pane){
+        pane.addEventListener('click', function(e){
+            var btn = e.target.closest('.adm-feedback-action');
+            if (!btn) return;
+            var item = btn.closest('.adm-suggest-item');
+            if (!item) return;
+            var action = btn.getAttribute('data-feedback-action') || '';
+            postAction(item, action, btn);
+        });
+    });
+
+    applyFilters();
 })();
 
 /* ════════════════════════════════════════════════════════

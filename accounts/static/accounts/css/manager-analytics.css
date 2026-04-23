@@ -23,9 +23,10 @@
 .summary-card {
   background: var(--surface);
   border: 1.5px solid var(--card-border);
-  border-radius: 14px;
-  padding: 18px 16px;
+  border-radius: 16px;
+  padding: 20px 16px;
   text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
 }
 
 .summary-val {
@@ -45,12 +46,16 @@
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
-  margin: 28px 0 12px;
+  margin: 30px 0 12px;
 }
 
 /* Vacancy analytics table */
 .an-table {
   width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -75,7 +80,7 @@
 }
 
 .an-table tr:hover td {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
 }
 
 .an-table .vac-link {
@@ -119,10 +124,10 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 10px 14px;
+  padding: 11px 14px;
   background: var(--surface);
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
+  border: 1.5px solid var(--card-border);
+  border-radius: 12px;
   margin-bottom: 8px;
 }
 

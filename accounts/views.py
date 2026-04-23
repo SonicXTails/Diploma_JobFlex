@@ -3,7 +3,7 @@ import json
 import os
 import re
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User
@@ -24,7 +24,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.http.request import RawPostDataException
 
-from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog
+from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog, UserFeedback
 from .telegram import send_hello_async, get_bot_username, resolve_chat_id_by_token, notify_new_chat_message
 
 
@@ -748,6 +748,102 @@ def api_profile_data(request):
         if not data.get('avatar_url'):
             data['avatar_url'] = manager.avatar.url if manager.avatar else ''
     return JsonResponse({'ok': True, 'user': data, 'bot_start_url': bot_start_url})
+
+
+def _feedback_submission_state(user):
+    """Return feedback submission state for one user with a 7-day cooldown."""
+    from django.utils import timezone
+
+    if not user.is_authenticated:
+        return {
+            'can_submit': False,
+            'reason': 'not_authenticated',
+            'last_created_at': None,
+            'next_allowed_at': None,
+            'remaining_days': None,
+        }
+    if is_admin_user(user) or is_moderator_user(user):
+        return {
+            'can_submit': False,
+            'reason': 'forbidden_role',
+            'last_created_at': None,
+            'next_allowed_at': None,
+            'remaining_days': None,
+        }
+
+    last_item = UserFeedback.objects.filter(user=user).order_by('-created_at').first()
+    if not last_item:
+        return {
+            'can_submit': True,
+            'reason': 'ok',
+            'last_created_at': None,
+            'next_allowed_at': None,
+            'remaining_days': 0,
+        }
+
+    next_allowed_at = last_item.created_at + timedelta(days=7)
+    now = timezone.now()
+    can_submit = now >= next_allowed_at
+    remaining_days = 0 if can_submit else max(1, (next_allowed_at - now).days + 1)
+    return {
+        'can_submit': can_submit,
+        'reason': 'ok' if can_submit else 'cooldown',
+        'last_created_at': last_item.created_at.isoformat(),
+        'next_allowed_at': next_allowed_at.isoformat(),
+        'remaining_days': remaining_days,
+    }
+
+
+@swagger_auto_schema(method='get', operation_summary="Статус отправки предложений/критики", tags=['accounts'])
+@swagger_auto_schema(method='post', operation_summary="Отправить предложение/критику по сайту", tags=['accounts'])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+@login_required
+def api_feedback(request):
+    """
+    Users except administrators and moderators can submit feedback.
+    Cooldown: one message per 7 days.
+    """
+    state = _feedback_submission_state(request.user)
+
+    if request.method == 'GET':
+        return JsonResponse({'ok': True, **state})
+
+    if state['reason'] == 'forbidden_role':
+        return JsonResponse({'error': 'forbidden', 'detail': 'Администратор и модератор не могут отправлять предложения.'}, status=403)
+    if not state['can_submit']:
+        return JsonResponse({
+            'error': 'cooldown',
+            'detail': f"Следующее сообщение можно отправить через {state['remaining_days']} дн.",
+            **state,
+        }, status=429)
+
+    data = request.data if hasattr(request, 'data') else {}
+    kind = str((data or {}).get('kind') or UserFeedback.KIND_SUGGESTION).strip()
+    if kind not in (UserFeedback.KIND_SUGGESTION, UserFeedback.KIND_CRITICISM):
+        kind = UserFeedback.KIND_SUGGESTION
+
+    message = str((data or {}).get('message') or '').strip()
+    if len(message) < 10:
+        return JsonResponse({'error': 'message_too_short', 'detail': 'Опишите предложение подробнее (минимум 10 символов).'}, status=400)
+    if len(message) > 2000:
+        return JsonResponse({'error': 'message_too_long', 'detail': 'Слишком длинное сообщение (максимум 2000 символов).'}, status=400)
+
+    item = UserFeedback.objects.create(
+        user=request.user,
+        kind=kind,
+        message=message,
+    )
+    _log_api_action(
+        request,
+        action='user_feedback_create',
+        before={},
+        after={'feedback_id': item.pk, 'kind': kind},
+        endpoint='accounts.api_feedback',
+        status_code=201,
+    )
+    new_state = _feedback_submission_state(request.user)
+    return JsonResponse({'ok': True, 'id': item.pk, **new_state}, status=201)
 
 
 @swagger_auto_schema(method='get', operation_summary="Данные о станциях метро", tags=['accounts'])
@@ -2091,7 +2187,8 @@ def moderator_analytics(request):
 def admin_panel(request):
     """Main page for system administrators."""
     from django.contrib.auth.models import User as _User
-    from vacancies.models import Vacancy
+    from django.utils import timezone as _tz
+    from vacancies.models import Vacancy, VacancyView, Bookmark, VacancyReport, VacancyModerationState
 
     from django.db.models import Q as _Q
     # Count users who currently have a Manager profile
@@ -2148,6 +2245,8 @@ def admin_panel(request):
         'admin_user_delete': 'Удаление пользователя администратором',
         'admin_user_contacts_update': 'Обновление контактов пользователя',
         'admin_user_role_change': 'Смена роли пользователя администратором',
+        'user_feedback_create': 'Новое предложение/критика от пользователя',
+        'admin_feedback_action': 'Действие администратора по предложению',
     }
     actor_label_map = {
         'system': 'Система',
@@ -2184,12 +2283,295 @@ def admin_panel(request):
             'after_json': json.dumps(item.after_data or {}, ensure_ascii=False, indent=2),
         })
 
+    # ── User feedback + product metrics for "Предложения" tab ─────────────────
+    now = _tz.now()
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+
+    feedback_qs = UserFeedback.objects.select_related('user', 'processed_by').order_by('-created_at')
+
+    def _feedback_payload(item):
+        author = item.user.get_full_name() or item.user.username
+        role = _admin_user_role(item.user)
+        role_label = {
+            'manager': 'Менеджер',
+            'applicant': 'Соискатель',
+            'user': 'Пользователь',
+            'moderator': 'Модератор',
+            'admin': 'Администратор',
+        }.get(role, 'Пользователь')
+        avatar_url = ''
+        applicant_profile = Applicant.objects.filter(user=item.user).first()
+        manager_profile = Manager.objects.filter(user=item.user).first()
+        if applicant_profile and applicant_profile.avatar:
+            avatar_url = applicant_profile.avatar.url
+        elif manager_profile and manager_profile.avatar:
+            avatar_url = manager_profile.avatar.url
+        fallback_letter = (author[:1] if author else item.user.username[:1]).upper()
+        return {
+            'id': item.pk,
+            'author': author,
+            'username': item.user.username,
+            'role_code': role,
+            'role_label': role_label,
+            'kind_code': item.kind,
+            'kind': item.get_kind_display(),
+            'status': item.status,
+            'status_label': item.get_status_display(),
+            'message': item.message,
+            'created_at': item.created_at,
+            'processed_at': item.processed_at,
+            'processed_by': (item.processed_by.get_full_name() or item.processed_by.username) if item.processed_by else '',
+            'avatar_url': avatar_url,
+            'fallback_letter': fallback_letter,
+        }
+
+    feedback_active_items = [_feedback_payload(x) for x in feedback_qs.filter(status=UserFeedback.STATUS_ACTIVE)[:160]]
+    feedback_archived_items = [_feedback_payload(x) for x in feedback_qs.filter(status=UserFeedback.STATUS_ARCHIVED)[:160]]
+
+    views_total = VacancyView.objects.count()
+    views_week = VacancyView.objects.filter(viewed_at__gte=week_ago).count()
+    views_month = VacancyView.objects.filter(viewed_at__gte=month_ago).count()
+    visitors_unique = VacancyView.objects.values('user_id').distinct().count()
+    bookmarks_total = Bookmark.objects.count()
+    applications_total = Application.objects.count()
+    reports_total = VacancyReport.objects.count()
+    feedback_total = feedback_qs.count()
+    feedback_week = feedback_qs.filter(created_at__gte=week_ago).count()
+    feedback_month = feedback_qs.filter(created_at__gte=month_ago).count()
+    feedback_active_count = feedback_qs.filter(status=UserFeedback.STATUS_ACTIVE).count()
+    feedback_archived_count = feedback_qs.filter(status=UserFeedback.STATUS_ARCHIVED).count()
+    feedback_resolved_count = feedback_qs.filter(status=UserFeedback.STATUS_RESOLVED).count()
+    feedback_rejected_count = feedback_qs.filter(status=UserFeedback.STATUS_REJECTED).count()
+    local_vacancies_total = Vacancy.objects.filter(created_by__isnull=False).count()
+    local_vacancies_active = Vacancy.objects.filter(created_by__isnull=False, is_moderator_deleted=False, is_active=True).count()
+    moderation_cards_total = VacancyModerationState.objects.count()
+    avg_views_per_visitor = round(views_total / max(visitors_unique, 1), 1)
+
+    presets = list(FilterPreset.objects.values_list('filters', flat=True))
+    keyword_counter = {}
+    region_counter = {}
+    experience_counter = {}
+    schedule_counter = {}
+    employment_counter = {}
+    remote_only_count = 0
+    for filters in presets:
+        if not isinstance(filters, dict):
+            continue
+        q_raw = str(filters.get('q') or '').strip().lower()
+        if q_raw:
+            for token in re.split(r'[^a-zA-Zа-яА-Я0-9]+', q_raw):
+                token = token.strip()
+                if len(token) < 2:
+                    continue
+                keyword_counter[token] = keyword_counter.get(token, 0) + 1
+        region = str(filters.get('region') or '').strip()
+        if region:
+            region_counter[region] = region_counter.get(region, 0) + 1
+        for exp in (filters.get('experience') or []):
+            exp = str(exp).strip()
+            if exp:
+                experience_counter[exp] = experience_counter.get(exp, 0) + 1
+        for sch in (filters.get('schedule') or []):
+            sch = str(sch).strip()
+            if sch:
+                schedule_counter[sch] = schedule_counter.get(sch, 0) + 1
+        for emp in (filters.get('employment') or []):
+            emp = str(emp).strip()
+            if emp:
+                employment_counter[emp] = employment_counter.get(emp, 0) + 1
+        if bool(filters.get('remote_only')):
+            remote_only_count += 1
+
+    def _top_label(counter_dict):
+        if not counter_dict:
+            return '—', 0
+        label, count = max(counter_dict.items(), key=lambda kv: kv[1])
+        return label, count
+
+    top_keyword, top_keyword_count = _top_label(keyword_counter)
+    top_region, top_region_count = _top_label(region_counter)
+    top_experience, top_experience_count = _top_label(experience_counter)
+    top_schedule, top_schedule_count = _top_label(schedule_counter)
+    top_employment, top_employment_count = _top_label(employment_counter)
+
+    experience_label_map = {
+        'noExperience': 'Без опыта',
+        'between1And3': '1-3 года',
+        'between3And6': '3-6 лет',
+        'moreThan6': 'Более 6 лет',
+    }
+    schedule_label_map = {
+        'fullDay': 'Полный день',
+        'shift': 'Сменный график',
+        'flexible': 'Гибкий график',
+        'remote': 'Удаленная работа',
+        'flyInFlyOut': 'Вахтовый метод',
+    }
+    employment_label_map = {
+        'full': 'Полная занятость',
+        'part': 'Частичная занятость',
+        'project': 'Проектная работа',
+        'volunteer': 'Волонтерство',
+        'probation': 'Стажировка',
+    }
+    top_experience = experience_label_map.get(top_experience, top_experience)
+    top_schedule = schedule_label_map.get(top_schedule, top_schedule)
+    top_employment = employment_label_map.get(top_employment, top_employment)
+    total_presets = max(len(presets), 1)
+    remote_only_share = round((remote_only_count / total_presets) * 100)
+
+    suggestion_metric_groups = [
+        {
+            'title': 'Поведение пользователей',
+            'metrics': [
+                {'title': 'Заходов на сайт', 'value': views_total, 'hint': 'Все просмотры вакансий'},
+                {'title': 'Уникальных посетителей', 'value': visitors_unique, 'hint': 'Пользователи с хотя бы 1 просмотром'},
+                {'title': 'Заходов за 7 дней', 'value': views_week, 'hint': 'Текущая недельная активность'},
+                {'title': 'Заходов за 30 дней', 'value': views_month, 'hint': 'Месячная динамика посещений'},
+                {'title': 'Среднее просмотров / посетитель', 'value': avg_views_per_visitor, 'hint': 'Глубина взаимодействия'},
+                {'title': 'Закладок', 'value': bookmarks_total, 'hint': 'Сохранённые вакансии'},
+                {'title': 'Откликов', 'value': applications_total, 'hint': 'Поданные заявки'},
+            ],
+        },
+        {
+            'title': 'Поиск и фильтры',
+            'metrics': [
+                {'title': 'Топ поисковое слово', 'value': top_keyword, 'hint': f'Использований: {top_keyword_count}'},
+                {'title': 'Топ регион фильтра', 'value': top_region, 'hint': f'Выбран: {top_region_count} раз'},
+                {'title': 'Часто выбираемый опыт', 'value': top_experience, 'hint': f'Выбран: {top_experience_count} раз'},
+                {'title': 'Частый график', 'value': top_schedule, 'hint': f'Выбран: {top_schedule_count} раз'},
+                {'title': 'Частая занятость', 'value': top_employment, 'hint': f'Выбрана: {top_employment_count} раз'},
+                {'title': 'Доля remote-only фильтров', 'value': f'{remote_only_share}%', 'hint': f'{remote_only_count} из {len(presets)} пресетов'},
+            ],
+        },
+        {
+            'title': 'Модерация и обратная связь',
+            'metrics': [
+                {'title': 'Жалоб на вакансии', 'value': reports_total, 'hint': 'Все пользовательские жалобы'},
+                {'title': 'Карточек модерации', 'value': moderation_cards_total, 'hint': 'Состояния работы модератора'},
+                {'title': 'Локальных вакансий', 'value': local_vacancies_total, 'hint': f'Активных: {local_vacancies_active}'},
+                {'title': 'Предложений за 7 дней', 'value': feedback_week, 'hint': f'За 30 дней: {feedback_month}'},
+                {'title': 'Всего предложений', 'value': feedback_total, 'hint': 'Сообщения из новой вкладки'},
+                {'title': 'Реализовано', 'value': feedback_resolved_count, 'hint': 'Сообщения, отмеченные как реализованные'},
+                {'title': 'В архиве', 'value': feedback_archived_count, 'hint': 'Отложенные сообщения администратора'},
+                {'title': 'Отклонено', 'value': feedback_rejected_count, 'hint': 'Сообщения, удаленные из ленты'},
+                {'title': 'Активная лента', 'value': feedback_active_count, 'hint': 'Сейчас в работе'},
+            ],
+        },
+    ]
+
+    def _build_conic(segments):
+        total = sum(seg['value'] for seg in segments) or 1
+        cursor = 0.0
+        parts = []
+        for seg in segments:
+            pct = round((seg['value'] / total) * 100, 1)
+            seg['pct'] = pct
+            seg['legend_bg'] = seg['color']
+            start = cursor
+            end = cursor + (seg['value'] / total) * 100
+            parts.append(f"{seg['color']} {start:.2f}% {end:.2f}%")
+            cursor = end
+        conic = ", ".join(parts) if parts else "#d4d4d4 0% 100%"
+        return conic, total
+
+    def _build_gradient_conic(segments):
+        total = sum(seg['value'] for seg in segments) or 1
+        cursor = 0.0
+        parts = []
+        for seg in segments:
+            pct = round((seg['value'] / total) * 100, 1)
+            seg['pct'] = pct
+            seg['legend_bg'] = f"linear-gradient(135deg, {seg['color_from']} 0%, {seg['color_to']} 100%)"
+            start = cursor
+            end = cursor + (seg['value'] / total) * 100
+            # Two stops per segment -> smooth gradient inside one sector, no split wedges.
+            parts.append(f"{seg['color_from']} {start:.2f}%")
+            parts.append(f"{seg['color_to']} {end:.2f}%")
+            cursor = end
+        conic = ", ".join(parts) if parts else "#d4d4d4 0% 100%"
+        return conic, total
+
+    pie_segments = [
+        {'label': 'Просмотры', 'value': views_total, 'color_from': '#8ab6f5', 'color_to': '#4f8ed8'},
+        {'label': 'Закладки', 'value': bookmarks_total, 'color_from': '#88d598', 'color_to': '#4fa966'},
+        {'label': 'Отклики', 'value': applications_total, 'color_from': '#f9c25d', 'color_to': '#e59410'},
+        {'label': 'Жалобы', 'value': reports_total, 'color_from': '#ef7a7a', 'color_to': '#c93e3e'},
+        {'label': 'Предложения', 'value': feedback_total, 'color_from': '#b586d3', 'color_to': '#8654ac'},
+    ]
+    pie_conic, suggestion_pie_total = _build_gradient_conic(pie_segments)
+
+    feedback_status_segments = [
+        {'label': 'В ленте', 'value': feedback_active_count, 'color_from': '#7cb4f4', 'color_to': '#4f8ed8'},
+        {'label': 'В архиве', 'value': feedback_archived_count, 'color_from': '#f9c467', 'color_to': '#e89814'},
+        {'label': 'Реализовано', 'value': feedback_resolved_count, 'color_from': '#67bd7f', 'color_to': '#2f7a45'},
+        {'label': 'Отклонено', 'value': feedback_rejected_count, 'color_from': '#f07f7f', 'color_to': '#cb4343'},
+    ]
+    feedback_status_conic, feedback_status_total = _build_gradient_conic(feedback_status_segments)
+
     return render(request, 'accounts/admin_panel.html', {
         'admin_profile': request.user.admin_profile,
         'stats': stats,
         'backups': backups,
         'audit_logs': audit_logs,
         'logs_page_obj': logs_page_obj,
+        'feedback_active_items': feedback_active_items,
+        'feedback_archived_items': feedback_archived_items,
+        'feedback_resolved_count': feedback_resolved_count,
+        'suggestion_metric_groups': suggestion_metric_groups,
+        'suggestion_pie_segments': pie_segments,
+        'suggestion_pie_conic': pie_conic,
+        'suggestion_pie_total': suggestion_pie_total,
+        'feedback_status_segments': feedback_status_segments,
+        'feedback_status_conic': feedback_status_conic,
+        'feedback_status_total': feedback_status_total,
+    })
+
+
+@admin_required
+def api_admin_feedback_action(request, feedback_id):
+    """Admin workflow for feedback messages: archive/reject/resolve/restore."""
+    from django.utils import timezone as _tz
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method_not_allowed', 'detail': 'Неверный метод запроса.'}, status=405)
+
+    item = get_object_or_404(UserFeedback, pk=feedback_id)
+    action = str((request.POST.get('action') or request.GET.get('action') or '')).strip().lower()
+
+    action_map = {
+        'archive': UserFeedback.STATUS_ARCHIVED,  # реализовать потом
+        'reject': UserFeedback.STATUS_REJECTED,   # отклонить
+        'resolve': UserFeedback.STATUS_RESOLVED,  # реализовано
+        'restore': UserFeedback.STATUS_ACTIVE,    # вернуть в ленту из архива
+    }
+    if action not in action_map:
+        return JsonResponse({'error': 'invalid_action', 'detail': 'Неизвестное действие.'}, status=400)
+
+    old_status = item.status
+    new_status = action_map[action]
+    if old_status == new_status:
+        return JsonResponse({'ok': True, 'status': new_status, 'status_label': item.get_status_display()})
+
+    item.status = new_status
+    item.processed_by = request.user
+    item.processed_at = _tz.now()
+    item.save(update_fields=['status', 'processed_by', 'processed_at'])
+
+    _log_api_action(
+        request,
+        action='admin_feedback_action',
+        before={'feedback_id': item.pk, 'status': old_status},
+        after={'feedback_id': item.pk, 'status': new_status, 'admin': request.user.username},
+        endpoint='accounts.api_admin_feedback_action',
+        status_code=200,
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'status': new_status,
+        'status_label': item.get_status_display(),
     })
 
 
@@ -2476,6 +2858,10 @@ def admin_moderator_report_pdf(request, report_id):
 def admin_users(request):
     """Admin page to manage users: list/paginate/edit contacts/delete/switch role."""
     q = (request.GET.get('q') or '').strip()
+    role_filter = (request.GET.get('role') or '').strip().lower()
+    allowed_role_filters = {'', 'admin', 'moderator', 'manager', 'applicant', 'user'}
+    if role_filter not in allowed_role_filters:
+        role_filter = ''
     page_num = request.GET.get('page') or '1'
     status = (request.GET.get('status') or '').strip()
     status_text_map = {
@@ -2500,6 +2886,8 @@ def admin_users(request):
         params = {'status': code}
         if q:
             params['q'] = q
+        if role_filter:
+            params['role'] = role_filter
         if page_num:
             params['page'] = page_num
         return redirect(reverse('accounts:admin_users') + '?' + urlencode(params))
@@ -2708,7 +3096,7 @@ def admin_users(request):
 
         return _redirect_with_status('unknown_action')
 
-    users_qs = User.objects.select_related('applicant', 'manager', 'moderator_profile').order_by('-date_joined')
+    users_qs = User.objects.select_related('applicant', 'manager', 'moderator_profile', 'admin_profile').order_by('-date_joined')
     if q:
         users_qs = users_qs.filter(
             Q(username__icontains=q)
@@ -2721,6 +3109,33 @@ def admin_users(request):
             | Q(manager__telegram__icontains=q)
             | Q(moderator_profile__telegram__icontains=q)
         ).distinct()
+    if role_filter == 'admin':
+        users_qs = users_qs.filter(Q(is_superuser=True) | Q(admin_profile__isnull=False))
+    elif role_filter == 'moderator':
+        users_qs = users_qs.filter(moderator_profile__isnull=False, admin_profile__isnull=True, is_superuser=False)
+    elif role_filter == 'manager':
+        users_qs = users_qs.filter(
+            manager__isnull=False,
+            admin_profile__isnull=True,
+            moderator_profile__isnull=True,
+            is_superuser=False,
+        )
+    elif role_filter == 'applicant':
+        users_qs = users_qs.filter(
+            applicant__isnull=False,
+            manager__isnull=True,
+            admin_profile__isnull=True,
+            moderator_profile__isnull=True,
+            is_superuser=False,
+        )
+    elif role_filter == 'user':
+        users_qs = users_qs.filter(
+            applicant__isnull=True,
+            manager__isnull=True,
+            admin_profile__isnull=True,
+            moderator_profile__isnull=True,
+            is_superuser=False,
+        )
 
     paginator = Paginator(users_qs, 20)
     page_obj = paginator.get_page(page_num)
@@ -2769,6 +3184,7 @@ def admin_users(request):
         'rows': rows,
         'page_obj': page_obj,
         'q': q,
+        'role_filter': role_filter,
         'status': status,
         'status_text': status_text,
     })

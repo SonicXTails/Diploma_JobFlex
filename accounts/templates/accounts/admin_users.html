@@ -46,6 +46,14 @@
 
     <form method="get" class="au-search">
         <input class="au-input" type="text" name="q" value="{{ q }}" placeholder="Поиск по имени, email, телефону, telegram">
+        <select class="au-input" name="role">
+            <option value="" {% if not role_filter %}selected{% endif %}>Все роли</option>
+            <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администратор</option>
+            <option value="moderator" {% if role_filter == 'moderator' %}selected{% endif %}>Модератор</option>
+            <option value="manager" {% if role_filter == 'manager' %}selected{% endif %}>Менеджер</option>
+            <option value="applicant" {% if role_filter == 'applicant' %}selected{% endif %}>Соискатель</option>
+            <option value="user" {% if role_filter == 'user' %}selected{% endif %}>Пользователь</option>
+        </select>
         <button class="au-btn" type="submit">Найти</button>
         <a class="au-btn" href="{% url 'accounts:admin_users' %}">Сбросить</a>
     </form>
@@ -125,13 +133,13 @@
     {% if page_obj %}
     <div class="au-pager">
         {% if page_obj.has_previous %}
-        <a class="au-page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}">← Назад</a>
+        <a class="au-page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">← Назад</a>
         {% endif %}
 
         <span class="au-page-num">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
 
         {% if page_obj.has_next %}
-        <a class="au-page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}">Вперёд →</a>
+        <a class="au-page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">Вперёд →</a>
         {% endif %}
     </div>
     {% endif %}

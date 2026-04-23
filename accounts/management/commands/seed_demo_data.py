@@ -1,12 +1,15 @@
+import base64
 import random
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import (
+    Administrator,
     Applicant,
     Application,
     CalendarNote,
@@ -17,10 +20,22 @@ from accounts.models import (
     Interview,
     Manager,
     Message,
+    Moderator,
+    UserFeedback,
     UserUiPreference,
     WorkExperience,
 )
-from vacancies.models import Bookmark, Employer, Review, Vacancy, VacancyView
+from vacancies.models import (
+    Bookmark,
+    Employer,
+    ModeratorDeletionPhoto,
+    ModeratorDeletionReport,
+    Review,
+    Vacancy,
+    VacancyModerationState,
+    VacancyReport,
+    VacancyView,
+)
 
 
 class Command(BaseCommand):
@@ -41,22 +56,28 @@ class Command(BaseCommand):
 
         managers = self._create_managers(password=password)
         applicants = self._create_applicants(password=password)
+        moderators = self._create_moderators(password=password)
         hh_employers = self._create_hh_employers()
         vacancies = self._create_vacancies(managers=managers, employers=hh_employers, now=now)
 
         self._create_reviews(vacancies=vacancies)
         applications = self._create_applications(applicants=applicants, vacancies=vacancies, now=now)
         self._create_bookmarks_and_views(applicants=applicants, vacancies=vacancies, now=now)
+        self._create_vacancy_reports(applicants=applicants, vacancies=vacancies)
+        self._create_moderation_states(moderators=moderators, vacancies=vacancies)
+        self._create_moderator_deletion_reports(moderators=moderators, vacancies=vacancies, now=now)
+        self._create_user_feedback(users=[*managers, *applicants], now=now)
         self._create_chats_and_messages(applications=applications, now=now)
         self._create_interviews(applications=applications, now=now)
-        self._create_calendar_notes(users=[*managers, *applicants], now=now)
+        self._create_calendar_notes(users=[*managers, *applicants, *moderators], now=now)
         self._create_filter_presets(applicants=applicants)
-        self._create_ui_preferences(users=[*managers, *applicants])
+        self._create_ui_preferences(users=[*managers, *applicants, *moderators])
 
         self.stdout.write(self.style.SUCCESS("Demo data successfully seeded."))
         self.stdout.write(
             self.style.WARNING(
-                "Manager users: demo_manager_1..4 | Applicant users: demo_applicant_1..10"
+                "Manager users: demo_manager_1..4 | Applicant users: demo_applicant_1..10 | "
+                "Moderator users: demo_moderator_1..3"
             )
         )
         self.stdout.write(self.style.WARNING(f"Password for all demo users: {password}"))
@@ -170,6 +191,30 @@ class Command(BaseCommand):
             self._upsert_education_and_experience(applicant=applicant, index=i)
 
         return applicants
+
+    def _create_moderators(self, password):
+        specs = [
+            ("demo_moderator_1", "Анастасия", "Фёдорова", "mod1@demo.local"),
+            ("demo_moderator_2", "Виктор", "Зайцев", "mod2@demo.local"),
+            ("demo_moderator_3", "Полина", "Власова", "mod3@demo.local"),
+        ]
+        moderators = []
+        for i, (username, first_name, last_name, email) in enumerate(specs, start=1):
+            user = self._create_user(
+                username=username,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+            )
+            moderator, _ = Moderator.objects.get_or_create(user=user)
+            moderator.patronymic = random.choice(["Александровна", "Владимировна", "Сергеевна", ""])
+            moderator.phone = f"+7 (925) 77{i}-1{i}-2{i}"
+            moderator.telegram = ""
+            moderator.notes = "Демо-профиль модератора для проверки аналитики."
+            moderator.save()
+            moderators.append(user)
+        return moderators
 
     def _upsert_education_and_experience(self, applicant, index):
         Education.objects.filter(applicant=applicant).delete()
@@ -549,4 +594,177 @@ class Command(BaseCommand):
             UserUiPreference.objects.update_or_create(
                 user=user,
                 defaults={"theme": "dark" if idx % 2 == 0 else "light"},
+            )
+
+    def _create_user_feedback(self, users, now):
+        texts = [
+            ("suggestion", "Добавьте отдельный фильтр по уровню зарплаты после налогов."),
+            ("criticism", "Мобильная версия календаря иногда неудобна: не видно все заметки за день."),
+            ("suggestion", "Хочется быстрый фильтр по типу занятости прямо в шапке страницы."),
+            ("criticism", "В карточке вакансии не всегда сразу видно, кто работодатель."),
+            ("suggestion", "Сделайте автосохранение черновика отклика при заполнении формы."),
+            ("suggestion", "Нужна сортировка по дате обновления вакансии, а не только по релевантности."),
+        ]
+        for idx, user in enumerate(users[:10]):
+            kind, msg = texts[idx % len(texts)]
+            status = UserFeedback.STATUS_ACTIVE
+            if idx in (7,):
+                status = UserFeedback.STATUS_ARCHIVED
+            elif idx in (8,):
+                status = UserFeedback.STATUS_RESOLVED
+            elif idx in (9,):
+                status = UserFeedback.STATUS_REJECTED
+            fb, _ = UserFeedback.objects.get_or_create(
+                user=user,
+                message=msg,
+                defaults={'kind': kind, 'status': status},
+            )
+            fb.kind = kind
+            fb.status = status
+            fb.save(update_fields=['kind', 'status'])
+
+    def _create_vacancy_reports(self, applicants, vacancies):
+        site_vacancies = [v for v in vacancies if v.created_by_id and not v.is_moderator_deleted]
+        if not site_vacancies:
+            return
+        reason_pool = [
+            (VacancyReport.REASON_SCAM, "Подозрение на мошенничество: просят оплату до трудоустройства."),
+            (VacancyReport.REASON_SPAM, "Похоже на спам или рекламную публикацию."),
+            (VacancyReport.REASON_MISLEADING, "Описание вакансии не совпадает с реальными требованиями."),
+            (VacancyReport.REASON_SUSPICIOUS, "Подозрительные условия и непрозрачные договоренности."),
+            (VacancyReport.REASON_OTHER, "Требуется дополнительная проверка модератором."),
+        ]
+        status_pool = [
+            VacancyReport.SELF_STATUS_NEW,
+            VacancyReport.SELF_STATUS_IN_WORK,
+            VacancyReport.SELF_STATUS_DONE,
+        ]
+        for vac_idx, vacancy in enumerate(site_vacancies[:9]):
+            report_count = min(3 + (vac_idx % 3), len(applicants))
+            reporters = random.sample(applicants, k=report_count)
+            for user_idx, user in enumerate(reporters):
+                reason_code, reason_text = reason_pool[(vac_idx + user_idx) % len(reason_pool)]
+                self_status = status_pool[(vac_idx + user_idx) % len(status_pool)]
+                report, _ = VacancyReport.objects.get_or_create(
+                    vacancy=vacancy,
+                    user=user,
+                    defaults={
+                        "reason_code": reason_code,
+                        "reason_text": reason_text,
+                        "self_status": self_status,
+                    },
+                )
+                report.reason_code = reason_code
+                report.reason_text = reason_text
+                report.self_status = self_status
+                report.save(update_fields=["reason_code", "reason_text", "self_status", "updated_at"])
+
+    def _create_moderation_states(self, moderators, vacancies):
+        site_vacancies = [v for v in vacancies if v.created_by_id and not v.is_moderator_deleted][:8]
+        if not site_vacancies:
+            return
+        statuses = [
+            VacancyModerationState.STATUS_NEW,
+            VacancyModerationState.STATUS_IN_WORK,
+            VacancyModerationState.STATUS_WAITING,
+        ]
+        notes = [
+            "Проверить историю жалоб менеджера.",
+            "Запрошены дополнительные пояснения от работодателя.",
+            "Ожидаю ответ от менеджера по текущему кейсу.",
+            "Отмечены неоднозначные условия, нужна доп. проверка.",
+            "",
+        ]
+        for m_idx, moderator in enumerate(moderators):
+            for v_idx, vacancy in enumerate(site_vacancies):
+                VacancyModerationState.objects.update_or_create(
+                    vacancy=vacancy,
+                    moderator=moderator,
+                    defaults={
+                        "status": statuses[(m_idx + v_idx) % len(statuses)],
+                        "note": notes[(m_idx * 2 + v_idx) % len(notes)],
+                    },
+                )
+
+    def _create_moderator_deletion_reports(self, moderators, vacancies, now):
+        site_vacancies = [v for v in vacancies if v.created_by_id]
+        if len(site_vacancies) < 3 or not moderators:
+            return
+
+        admin_user = User.objects.filter(is_superuser=True).first()
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVQI12P4z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
+        )
+
+        # Active deletion report
+        vac_active = site_vacancies[-1]
+        mod_active = moderators[0]
+        vac_active.is_moderator_deleted = True
+        vac_active.is_active = False
+        vac_active.save(update_fields=["is_moderator_deleted", "is_active", "updated_at"])
+        active_report, _ = ModeratorDeletionReport.objects.get_or_create(
+            vacancy=vac_active,
+            moderator=mod_active,
+            defaults={
+                "manager": vac_active.created_by,
+                "reason": "Вакансия содержит признаки мошеннической схемы и была скрыта до проверки.",
+                "vacancy_title": vac_active.title,
+                "vacancy_company": vac_active.company,
+                "vacancy_description": vac_active.description[:800] if vac_active.description else "",
+                "vacancy_external_id": vac_active.external_id or "",
+                "manager_full_name": vac_active.created_by.get_full_name() if vac_active.created_by else "",
+                "manager_email": vac_active.created_by.email if vac_active.created_by else "",
+                "moderator_full_name": mod_active.get_full_name(),
+                "moderator_email": mod_active.email,
+                "reports_count": VacancyReport.objects.filter(vacancy=vac_active).count(),
+                "dominant_reason_code": VacancyReport.REASON_SCAM,
+                "dominant_reason_label": "Подозрение на мошенничество",
+                "is_restored": False,
+            },
+        )
+        if not active_report.photos.exists():
+            ModeratorDeletionPhoto.objects.create(
+                report=active_report,
+                image=ContentFile(png_bytes, name="seed-evidence-active.png"),
+                order=0,
+            )
+
+        # Restored deletion report
+        vac_restored = site_vacancies[-2]
+        mod_restored = moderators[1] if len(moderators) > 1 else moderators[0]
+        vac_restored.is_moderator_deleted = False
+        vac_restored.is_active = True
+        vac_restored.save(update_fields=["is_moderator_deleted", "is_active", "updated_at"])
+        restored_report, _ = ModeratorDeletionReport.objects.get_or_create(
+            vacancy=vac_restored,
+            moderator=mod_restored,
+            defaults={
+                "manager": vac_restored.created_by,
+                "reason": "Описание вакансии было скорректировано, после проверки восстановлена публикация.",
+                "vacancy_title": vac_restored.title,
+                "vacancy_company": vac_restored.company,
+                "vacancy_description": vac_restored.description[:800] if vac_restored.description else "",
+                "vacancy_external_id": vac_restored.external_id or "",
+                "manager_full_name": vac_restored.created_by.get_full_name() if vac_restored.created_by else "",
+                "manager_email": vac_restored.created_by.email if vac_restored.created_by else "",
+                "moderator_full_name": mod_restored.get_full_name(),
+                "moderator_email": mod_restored.email,
+                "reports_count": VacancyReport.objects.filter(vacancy=vac_restored).count(),
+                "dominant_reason_code": VacancyReport.REASON_MISLEADING,
+                "dominant_reason_label": "Некорректное описание вакансии",
+                "is_restored": True,
+                "restored_by": admin_user if (admin_user and Administrator.objects.filter(user=admin_user).exists()) else None,
+                "restored_at": now - timedelta(days=1),
+            },
+        )
+        if not restored_report.photos.exists():
+            ModeratorDeletionPhoto.objects.create(
+                report=restored_report,
+                image=ContentFile(png_bytes, name="seed-evidence-restored-1.png"),
+                order=0,
+            )
+            ModeratorDeletionPhoto.objects.create(
+                report=restored_report,
+                image=ContentFile(png_bytes, name="seed-evidence-restored-2.png"),
+                order=1,
             )

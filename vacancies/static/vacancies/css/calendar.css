@@ -7,7 +7,7 @@
         gap: 20px;
         align-items: start;
         margin: 8px 0 40px;
-        max-width: 860px;
+        max-width: 920px;
         margin-left: auto;
         margin-right: auto;
     }
@@ -59,6 +59,10 @@
         gap: 5px;
     }
     .cal-weekdays { margin-bottom: 6px; }
+    .cal-days {
+        padding: 3px;
+        margin: -3px;
+    }
     .cal-weekdays span {
         text-align: center;
         font-size: 12px;
@@ -314,7 +318,7 @@
     .cal-event--note[draggable="true"]:active { cursor: grabbing; opacity: .72; }
     .cal-loading { text-align: center; padding: 30px 0; color: var(--text-secondary); font-size: 14px; }
     /* Month slide animation */
-    .cal-main { overflow: hidden; }
+    .cal-main { overflow: visible; }
     @keyframes cal-sl-left  { from { opacity:0; transform:translateX(-30px); } to { opacity:1; transform:none; } }
     @keyframes cal-sl-right { from { opacity:0; transform:translateX( 30px); } to { opacity:1; transform:none; } }
     .cal-days--in-left  { animation: cal-sl-left  .24s cubic-bezier(.22,.68,0,1.2) both; }

@@ -1931,13 +1931,16 @@ input[type="checkbox"]:focus-visible {
   margin: 0 0 20px;
 }
 .profile-tab-btn {
-  padding: 10px 22px;
+  padding: 10px 18px;
   font-size: 14px; font-weight: 600; font-family: inherit;
-  background: none; border: none; cursor: pointer;
-  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1.5px solid var(--card-border);
   border-bottom: 2.5px solid transparent;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  color: var(--text-secondary);
   margin-bottom: -2px;
-  transition: color .15s, border-color .15s;
+  transition: color .15s, border-color .15s, background .15s;
 }
 .profile-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 .profile-tab-btn:hover:not(.active) { color: var(--text-main); }
@@ -1956,10 +1959,10 @@ input[type="checkbox"]:focus-visible {
 .kpi-card {
   background: var(--card-bg);
   border: 1.5px solid var(--card-border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 16px 24px;
   text-align: center;
-  box-shadow: var(--card-shadow);
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
 }
 .kpi-card__value {
   font-size: 28px; font-weight: 700;
@@ -1980,14 +1983,14 @@ input[type="checkbox"]:focus-visible {
 .analytics-section {
   background: var(--card-bg);
   border: 1.5px solid var(--card-border);
-  border-radius: 14px;
-  box-shadow: var(--card-shadow);
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.08);
   padding: 20px 22px;
   margin-bottom: 16px;
   position: relative;
 }
 .analytics-section h4 {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 14px; font-weight: 700;
   color: var(--text-main);
   display: flex;
@@ -2022,7 +2025,7 @@ input[type="checkbox"]:focus-visible {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.55;
-  margin: -6px 0 14px;
+  margin: 0 0 14px;
 }
 
 /* ── Salary expectations inline editor ──────────── */
@@ -2603,6 +2606,65 @@ input[type="checkbox"]:focus-visible {
   padding: 20px 24px;
 }
 
+/* Feedback form (profile) */
+.p-feedback .p-section__header {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--card-bg)) 0%, var(--card-bg) 100%);
+}
+.p-feedback__hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.p-feedback__form {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+}
+.p-feedback__field { display: grid; gap: 6px; }
+.p-feedback__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.p-feedback__select,
+.p-feedback__textarea {
+  width: 100%;
+  border: 1.5px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 10px 12px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.p-feedback__select {
+  max-width: 300px;
+  cursor: pointer;
+}
+.p-feedback__textarea {
+  min-height: 140px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.p-feedback__select:focus,
+.p-feedback__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.p-feedback__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.p-feedback__status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* Edit / Add buttons on sections */
 .btn-edit-section,
 .btn-add-section {
@@ -2979,6 +3041,8 @@ input[type="checkbox"]:focus-visible {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 5px;
+    padding: 3px;
+    margin: -3px;
 }
 .cal-fs-day {
     min-height: 78px;

@@ -225,6 +225,37 @@
                 </div>
             </section>
 
+            {% if not request.user.is_superuser and not request.user.moderator_profile %}
+            <section class="p-section p-feedback">
+                <div class="p-section__header">
+                    <h3 class="p-section__title">💡 Предложение или критика по сайту</h3>
+                </div>
+                <div class="p-section__body">
+                    <p class="p-feedback__hint">
+                        Поделитесь идеей или проблемой. Чтобы избежать спама, отправка доступна 1 раз в 7 дней.
+                    </p>
+                    <div class="p-feedback__form">
+                        <div class="p-feedback__field">
+                            <label for="feedback-kind" class="p-feedback__label">Тип сообщения</label>
+                            <select id="feedback-kind" class="p-feedback__select">
+                                <option value="suggestion">Предложение</option>
+                                <option value="criticism">Критика</option>
+                            </select>
+                        </div>
+                        <div class="p-feedback__field">
+                            <label for="feedback-message" class="p-feedback__label">Сообщение</label>
+                            <textarea id="feedback-message" class="p-feedback__textarea" rows="5" maxlength="2000"
+                                      placeholder="Например: добавьте фильтр по типу оплаты, чтобы быстрее находить подходящие вакансии."></textarea>
+                        </div>
+                        <div class="p-feedback__actions">
+                            <button id="feedback-send-btn" class="btn">Отправить</button>
+                            <span id="feedback-status" class="p-feedback__status"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
         </div><!-- /#tab-profile -->
 
             <!-- ─────────────────── TAB: ANALYTICS ──────────────── -->
@@ -2038,6 +2069,70 @@ document.getElementById('delete-btn').addEventListener('click', function(){
             else showError('Ошибка удаления аккаунта.');
         }).catch(function(){ showError('Сетевая ошибка'); });
 });
+
+/* ──────────────────────────────────────────────
+   Feedback form (suggestions/criticism)
+────────────────────────────────────────────── */
+(function(){
+    var sendBtn = document.getElementById('feedback-send-btn');
+    var statusEl = document.getElementById('feedback-status');
+    var kindEl = document.getElementById('feedback-kind');
+    var msgEl = document.getElementById('feedback-message');
+    if (!sendBtn || !statusEl || !kindEl || !msgEl) return;
+
+    function setStatus(text, isError){
+        statusEl.textContent = text || '';
+        statusEl.style.color = isError ? '#c9375a' : 'var(--text-secondary)';
+    }
+    function applyState(state){
+        if (!state) return;
+        if (state.can_submit) {
+            sendBtn.disabled = false;
+            setStatus('Можно отправить сообщение.', false);
+            return;
+        }
+        if (state.reason === 'cooldown') {
+            sendBtn.disabled = true;
+            setStatus('Следующее сообщение можно отправить через ' + (state.remaining_days || 0) + ' дн.', false);
+            return;
+        }
+        sendBtn.disabled = true;
+        setStatus('Для вашей роли отправка сообщений недоступна.', false);
+    }
+
+    apiFetch('{% url "accounts:api_feedback" %}', 'GET')
+        .then(function(res){
+            if (res.status === 200 && res.body && res.body.ok) applyState(res.body);
+            else setStatus('Не удалось получить статус отправки.', true);
+        })
+        .catch(function(){ setStatus('Ошибка сети при получении статуса.', true); });
+
+    sendBtn.addEventListener('click', function(){
+        var message = (msgEl.value || '').trim();
+        if (message.length < 10) {
+            setStatus('Введите сообщение не короче 10 символов.', true);
+            return;
+        }
+        sendBtn.disabled = true;
+        setStatus('Отправка…', false);
+        apiFetch('{% url "accounts:api_feedback" %}', 'POST', {
+            kind: kindEl.value || 'suggestion',
+            message: message
+        }).then(function(res){
+            if (res.status >= 200 && res.status < 300 && res.body && res.body.ok) {
+                msgEl.value = '';
+                applyState(res.body);
+                setStatus('Спасибо! Сообщение отправлено.', false);
+            } else {
+                sendBtn.disabled = false;
+                setStatus((res.body && res.body.detail) || 'Не удалось отправить сообщение.', true);
+            }
+        }).catch(function(){
+            sendBtn.disabled = false;
+            setStatus('Сетевая ошибка при отправке.', true);
+        });
+    });
+})();
 
 /* ──────────────────────────────────────────────
    Main page render

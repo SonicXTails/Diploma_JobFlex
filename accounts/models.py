@@ -420,3 +420,49 @@ class ApiActionLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at:%d.%m.%Y %H:%M:%S} {self.method} {self.action} ({self.actor_role})"
+
+
+class UserFeedback(models.Model):
+    """Suggestion or criticism sent by a non-admin/non-moderator user."""
+    KIND_SUGGESTION = 'suggestion'
+    KIND_CRITICISM = 'criticism'
+    KIND_CHOICES = [
+        (KIND_SUGGESTION, 'Предложение'),
+        (KIND_CRITICISM, 'Критика'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='feedback_items',
+    )
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_SUGGESTION)
+    message = models.TextField('Сообщение')
+    STATUS_ACTIVE = 'active'
+    STATUS_ARCHIVED = 'archived'
+    STATUS_RESOLVED = 'resolved'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'В ленте'),
+        (STATUS_ARCHIVED, 'В архиве'),
+        (STATUS_RESOLVED, 'Реализовано'),
+        (STATUS_REJECTED, 'Отклонено'),
+    ]
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='processed_feedback_items',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Предложение/критика пользователя'
+        verbose_name_plural = 'Предложения и критика пользователей'
+
+    def __str__(self):
+        return f"{self.user.username}: {self.get_kind_display()} ({self.created_at:%d.%m.%Y})"
