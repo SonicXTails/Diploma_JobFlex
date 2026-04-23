@@ -226,6 +226,71 @@
             </section>
 
             {% if not request.user.is_superuser and not request.user.moderator_profile %}
+            <section class="p-section p-docs">
+                <div class="p-section__header">
+                    <h3 class="p-section__title">📄 Документы для верификации</h3>
+                </div>
+                <div class="p-section__body">
+                    <p class="p-docs__hint">
+                        Прикрепите российские документы с серией и номером. Поддерживаются JPG, PNG, WEBP, PDF (до 10 МБ, до 6 файлов).
+                    </p>
+                    <div class="p-docs__form">
+                        <div class="p-docs__row">
+                            <div class="p-docs__field">
+                                <label class="p-docs__label" for="doc-kind">Тип документа</label>
+                                <select id="doc-kind" class="p-docs__select">
+                                    <option value="passport_rf">Паспорт РФ</option>
+                                    <option value="snils">СНИЛС</option>
+                                    <option value="inn">ИНН</option>
+                                    <option value="foreign_passport">Загранпаспорт</option>
+                                    <option value="driver_license">Водительское удостоверение</option>
+                                    <option value="military_id">Военный билет</option>
+                                </select>
+                            </div>
+                            <div class="p-docs__field">
+                                <label class="p-docs__label" for="doc-serial">Серия</label>
+                                <input id="doc-serial" class="p-docs__input" type="text" placeholder="Например: 1234">
+                            </div>
+                            <div class="p-docs__field">
+                                <label class="p-docs__label" for="doc-number">Номер</label>
+                                <input id="doc-number" class="p-docs__input" type="text" placeholder="Например: 567890">
+                            </div>
+                        </div>
+                        <div class="p-docs__row">
+                            <div class="p-docs__field">
+                                <label class="p-docs__label" for="doc-issued-date">Дата выдачи</label>
+                                <input id="doc-issued-date" class="p-docs__input" type="date">
+                            </div>
+                            <div class="p-docs__field p-docs__field--wide">
+                                <label class="p-docs__label" for="doc-issued-by">Кем выдан</label>
+                                <input id="doc-issued-by" class="p-docs__input" type="text" placeholder="Например: ОУФМС России по г. Казани">
+                            </div>
+                            <div class="p-docs__field">
+                                <label class="p-docs__label" for="doc-division-code">Код подразделения</label>
+                                <input id="doc-division-code" class="p-docs__input" type="text" placeholder="123-456">
+                            </div>
+                        </div>
+                        <div class="p-docs__row">
+                            <div class="p-docs__field p-docs__field--wide">
+                                <label class="p-docs__label" for="doc-files">Файлы документа</label>
+                                <input id="doc-files" class="p-docs__file-native" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" multiple>
+                                <label for="doc-files" class="p-docs__file-picker">
+                                    <span class="p-docs__file-btn">Выбрать файлы</span>
+                                    <span class="p-docs__file-caption" id="doc-files-caption">Файлы не выбраны</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="p-docs__actions">
+                            <button id="doc-save-btn" class="btn">Добавить документ</button>
+                            <span id="doc-status" class="p-docs__status"></span>
+                        </div>
+                    </div>
+                    <div class="p-docs__list" id="doc-list">
+                        <p class="p-docs__empty">Документы пока не добавлены.</p>
+                    </div>
+                </div>
+            </section>
+
             <section class="p-section p-feedback">
                 <div class="p-section__header">
                     <h3 class="p-section__title">💡 Предложение или критика по сайту</h3>
@@ -732,6 +797,7 @@
             <h3 class="modal-title" id="modal-extra-edu-title">Добавить доп. образование</h3>
             <div class="p-form-grid">
                 <div class="field full"><label>Название *</label><input id="extra-edu-name" type="text" placeholder="Курс, сертификат, тренинг…"></div>
+                <div class="field full"><label>Серийный номер документа</label><input id="extra-edu-serial" type="text" placeholder="Например: CERT-2026-001245"></div>
                 <div class="field full"><label>Описание</label><textarea id="extra-edu-desc" rows="3" placeholder="Кратко о содержании или результате" style="resize:vertical"></textarea></div>
             </div>
             <div class="modal-actions" style="margin-top:20px">
@@ -1546,6 +1612,7 @@ function renderExtraEduCards() {
                 '<button class="p-card-btn p-card-btn--delete extra-edu-del-btn" data-id="'+x.id+'" title="Удалить">✕</button>' +
             '</div>' +
             '<p class="p-card-title">'+esc(x.name)+'</p>' +
+            (x.document_serial ? '<p class="p-card-meta">Серийный номер: <b>'+esc(x.document_serial)+'</b></p>' : '') +
             (x.description ? '<p class="p-card-desc">'+esc(x.description)+'</p>' : '') +
         '</div>';
     }).join('');
@@ -1585,10 +1652,12 @@ function openExtraEduModal(id) {
         var entry = STATE.extra_education.find(function(x){ return x.id===id; }) || {};
         document.getElementById('modal-extra-edu-title').textContent = 'Редактировать доп. образование';
         document.getElementById('extra-edu-name').value = entry.name        || '';
+        document.getElementById('extra-edu-serial').value = entry.document_serial || '';
         document.getElementById('extra-edu-desc').value = entry.description || '';
     } else {
         document.getElementById('modal-extra-edu-title').textContent = 'Добавить доп. образование';
         document.getElementById('extra-edu-name').value = '';
+        document.getElementById('extra-edu-serial').value = '';
         document.getElementById('extra-edu-desc').value = '';
     }
     openModal(_extraEduModal);
@@ -1600,6 +1669,7 @@ document.getElementById('modal-extra-edu-save').addEventListener('click', functi
     errEl.style.display = 'none';
     var payload = {
         name:        document.getElementById('extra-edu-name').value.trim(),
+        document_serial: document.getElementById('extra-edu-serial').value.trim(),
         description: document.getElementById('extra-edu-desc').value.trim(),
     };
     if (!payload.name) { errEl.textContent='Укажите название.'; errEl.style.display='block'; return; }
@@ -2132,6 +2202,176 @@ document.getElementById('delete-btn').addEventListener('click', function(){
             setStatus('Сетевая ошибка при отправке.', true);
         });
     });
+})();
+
+/* ──────────────────────────────────────────────
+   User documents form
+────────────────────────────────────────────── */
+(function(){
+    var docListEl = document.getElementById('doc-list');
+    var docStatusEl = document.getElementById('doc-status');
+    var docSaveBtn = document.getElementById('doc-save-btn');
+    var docKindEl = document.getElementById('doc-kind');
+    var docSerialEl = document.getElementById('doc-serial');
+    var docNumberEl = document.getElementById('doc-number');
+    var docIssuedDateEl = document.getElementById('doc-issued-date');
+    var docIssuedByEl = document.getElementById('doc-issued-by');
+    var docDivisionCodeEl = document.getElementById('doc-division-code');
+    var docFilesEl = document.getElementById('doc-files');
+    var docFilesCaptionEl = document.getElementById('doc-files-caption');
+    if (!docListEl || !docStatusEl || !docSaveBtn || !docKindEl || !docSerialEl || !docNumberEl || !docFilesEl) return;
+
+    function setDocStatus(text, isError){
+        docStatusEl.textContent = text || '';
+        docStatusEl.style.color = isError ? '#c9375a' : 'var(--text-secondary)';
+    }
+
+    function escHtml(value){
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function renderDocs(items){
+        if (!items || !items.length){
+            docListEl.innerHTML = '<p class="p-docs__empty">Документы пока не добавлены.</p>';
+            return;
+        }
+        docListEl.innerHTML = items.map(function(item){
+            var serialText = item.serial ? ('Серия: <b>' + escHtml(item.serial) + '</b>') : '';
+            var numText = item.number_masked ? ('Номер: <b>' + escHtml(item.number_masked) + '</b>') : '';
+            var fileHtml = (item.files || []).map(function(file){
+                return '<a class="p-docs-file" href="' + escHtml(file.url) + '" target="_blank" rel="noopener">' + escHtml(file.name) + '</a>';
+            }).join('');
+            return '<article class="p-docs-item">'
+                + '<div class="p-docs-item__head">'
+                +   '<div class="p-docs-item__title">' + escHtml(item.doc_type_label || 'Документ') + '</div>'
+                +   '<button class="p-docs-item__delete" data-doc-id="' + item.id + '">Удалить</button>'
+                + '</div>'
+                + '<div class="p-docs-item__meta">'
+                +   (serialText ? '<span>' + serialText + '</span>' : '')
+                +   (numText ? '<span>' + numText + '</span>' : '')
+                +   (item.issued_date ? '<span>Дата выдачи: <b>' + escHtml(item.issued_date) + '</b></span>' : '')
+                +   (item.division_code ? '<span>Код подразделения: <b>' + escHtml(item.division_code) + '</b></span>' : '')
+                + '</div>'
+                + (item.issued_by ? '<div class="p-docs-item__issued-by">Кем выдан: ' + escHtml(item.issued_by) + '</div>' : '')
+                + '<div class="p-docs-item__files">' + (fileHtml || '<span class="p-docs-file p-docs-file--empty">Файлы не прикреплены</span>') + '</div>'
+                + '</article>';
+        }).join('');
+        docListEl.querySelectorAll('.p-docs-item__delete').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var docId = btn.getAttribute('data-doc-id');
+                if (!docId) return;
+                if (!confirm('Удалить этот документ?')) return;
+                btn.disabled = true;
+                fetch('/accounts/api/profile/documents/' + docId + '/delete/', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'X-CSRFToken': getCookie('csrftoken')}
+                })
+                .then(function(r){ return r.json().then(function(d){ return {status: r.status, body: d}; }); })
+                .then(function(res){
+                    if (res.status >= 200 && res.status < 300 && res.body && res.body.ok){
+                        setDocStatus('Документ удалён.', false);
+                        loadDocs();
+                    } else {
+                        btn.disabled = false;
+                        setDocStatus((res.body && res.body.detail) || 'Не удалось удалить документ.', true);
+                    }
+                })
+                .catch(function(){
+                    btn.disabled = false;
+                    setDocStatus('Сетевая ошибка при удалении документа.', true);
+                });
+            });
+        });
+    }
+
+    function loadDocs(){
+        fetch('/accounts/api/profile/documents/', {credentials: 'same-origin'})
+            .then(function(r){ return r.json().then(function(d){ return {status: r.status, body: d}; }); })
+            .then(function(res){
+                if (res.status >= 200 && res.status < 300 && res.body && res.body.ok){
+                    renderDocs(res.body.items || []);
+                } else {
+                    setDocStatus((res.body && res.body.detail) || 'Не удалось загрузить документы.', true);
+                }
+            })
+            .catch(function(){ setDocStatus('Сетевая ошибка при загрузке документов.', true); });
+    }
+
+    function updateFilesCaption(){
+        if (!docFilesCaptionEl) return;
+        var files = docFilesEl.files ? Array.prototype.slice.call(docFilesEl.files) : [];
+        if (!files.length){
+            docFilesCaptionEl.textContent = 'Файлы не выбраны';
+            return;
+        }
+        if (files.length === 1){
+            docFilesCaptionEl.textContent = files[0].name;
+            return;
+        }
+        docFilesCaptionEl.textContent = 'Выбрано файлов: ' + files.length;
+    }
+
+    docFilesEl.addEventListener('change', updateFilesCaption);
+
+    docSaveBtn.addEventListener('click', function(){
+        var number = (docNumberEl.value || '').trim();
+        var files = docFilesEl.files ? Array.prototype.slice.call(docFilesEl.files) : [];
+        if (!number){
+            setDocStatus('Заполните номер документа.', true);
+            return;
+        }
+        if (!files.length){
+            setDocStatus('Прикрепите хотя бы один файл.', true);
+            return;
+        }
+
+        var fd = new FormData();
+        fd.append('doc_type', docKindEl.value || '');
+        fd.append('serial', (docSerialEl.value || '').trim());
+        fd.append('number', number);
+        fd.append('issued_date', (docIssuedDateEl.value || '').trim());
+        fd.append('issued_by', (docIssuedByEl.value || '').trim());
+        fd.append('division_code', (docDivisionCodeEl.value || '').trim());
+        files.forEach(function(f){ fd.append('files', f); });
+
+        docSaveBtn.disabled = true;
+        setDocStatus('Сохранение…', false);
+        fetch('/accounts/api/profile/documents/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            body: fd
+        })
+        .then(function(r){ return r.json().then(function(d){ return {status: r.status, body: d}; }); })
+        .then(function(res){
+            docSaveBtn.disabled = false;
+            if (res.status >= 200 && res.status < 300 && res.body && res.body.ok){
+                docSerialEl.value = '';
+                docNumberEl.value = '';
+                docIssuedDateEl.value = '';
+                docIssuedByEl.value = '';
+                docDivisionCodeEl.value = '';
+                docFilesEl.value = '';
+                updateFilesCaption();
+                setDocStatus('Документ добавлен.', false);
+                loadDocs();
+            } else {
+                setDocStatus((res.body && res.body.detail) || 'Не удалось добавить документ.', true);
+            }
+        })
+        .catch(function(){
+            docSaveBtn.disabled = false;
+            setDocStatus('Сетевая ошибка при сохранении документа.', true);
+        });
+    });
+
+    updateFilesCaption();
+    loadDocs();
 })();
 
 /* ──────────────────────────────────────────────

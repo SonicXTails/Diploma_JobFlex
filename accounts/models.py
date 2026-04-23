@@ -86,6 +86,7 @@ class Education(models.Model):
 class ExtraEducation(models.Model):
     applicant   = models.ForeignKey(Applicant, on_delete=models.CASCADE, related_name='extra_educations')
     name        = models.CharField('Название', max_length=255)
+    document_serial = models.CharField('Серийный номер документа', max_length=120, blank=True)
     description = models.TextField('Описание', blank=True)
     order       = models.PositiveSmallIntegerField('Порядок', default=0)
 
@@ -466,3 +467,56 @@ class UserFeedback(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.get_kind_display()} ({self.created_at:%d.%m.%Y})"
+
+
+class UserDocument(models.Model):
+    """Personal identity/tax/social document attached in user profile."""
+    DOC_PASSPORT_RF = 'passport_rf'
+    DOC_SNILS = 'snils'
+    DOC_INN = 'inn'
+    DOC_FOREIGN_PASSPORT = 'foreign_passport'
+    DOC_DRIVER_LICENSE = 'driver_license'
+    DOC_MILITARY_ID = 'military_id'
+    DOC_TYPE_CHOICES = [
+        (DOC_PASSPORT_RF, 'Паспорт РФ'),
+        (DOC_SNILS, 'СНИЛС'),
+        (DOC_INN, 'ИНН'),
+        (DOC_FOREIGN_PASSPORT, 'Загранпаспорт'),
+        (DOC_DRIVER_LICENSE, 'Водительское удостоверение'),
+        (DOC_MILITARY_ID, 'Военный билет'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
+    doc_type = models.CharField('Тип документа', max_length=32, choices=DOC_TYPE_CHOICES, db_index=True)
+    serial = models.CharField('Серия', max_length=32, blank=True)
+    number = models.CharField('Номер', max_length=32)
+    issued_date = models.DateField('Дата выдачи', null=True, blank=True)
+    issued_by = models.CharField('Кем выдан', max_length=255, blank=True)
+    division_code = models.CharField('Код подразделения', max_length=16, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Документ пользователя'
+        verbose_name_plural = 'Документы пользователей'
+
+    def __str__(self):
+        base = self.get_doc_type_display()
+        if self.serial:
+            return f"{self.user.username}: {base} {self.serial} {self.number}"
+        return f"{self.user.username}: {base} {self.number}"
+
+
+class UserDocumentFile(models.Model):
+    document = models.ForeignKey(UserDocument, on_delete=models.CASCADE, related_name='files')
+    file = models.FileField('Файл документа', upload_to='user_documents/%Y/%m/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Файл документа пользователя'
+        verbose_name_plural = 'Файлы документов пользователей'
+
+    def __str__(self):
+        return f"Файл документа #{self.document_id}"

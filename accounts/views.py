@@ -24,7 +24,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.http.request import RawPostDataException
 
-from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog, UserFeedback
+from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog, UserFeedback, UserDocument, UserDocumentFile
 from .telegram import send_hello_async, get_bot_username, resolve_chat_id_by_token, notify_new_chat_message
 
 
@@ -711,7 +711,12 @@ def api_profile_data(request):
                 for e in applicant.educations.all()
             ],
             'extra_education': [
-                {'id': x.pk, 'name': x.name, 'description': x.description}
+                {
+                    'id': x.pk,
+                    'name': x.name,
+                    'description': x.description,
+                    'document_serial': x.document_serial,
+                }
                 for x in applicant.extra_educations.all()
             ],
             'work_experience': [
@@ -844,6 +849,194 @@ def api_feedback(request):
     )
     new_state = _feedback_submission_state(request.user)
     return JsonResponse({'ok': True, 'id': item.pk, **new_state}, status=201)
+
+
+DOCUMENT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+DOCUMENT_ALLOWED_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+}
+DOCUMENT_ALLOWED_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.pdf'}
+DOCUMENT_MAX_FILES = 6
+
+
+def _normalize_doc_value(raw):
+    return re.sub(r'[\s\-]', '', str(raw or '').strip())
+
+
+def _mask_doc_number(number):
+    value = str(number or '').strip()
+    if not value:
+        return ''
+    if len(value) <= 4:
+        return '*' * len(value)
+    return ('*' * (len(value) - 4)) + value[-4:]
+
+
+def _serialize_user_document(doc):
+    return {
+        'id': doc.pk,
+        'doc_type': doc.doc_type,
+        'doc_type_label': doc.get_doc_type_display(),
+        'serial': doc.serial,
+        'number': doc.number,
+        'number_masked': _mask_doc_number(doc.number),
+        'issued_date': doc.issued_date.isoformat() if doc.issued_date else '',
+        'issued_by': doc.issued_by,
+        'division_code': doc.division_code,
+        'created_at': doc.created_at.isoformat(),
+        'files': [
+            {
+                'id': f.pk,
+                'name': os.path.basename(f.file.name),
+                'url': f.file.url,
+            }
+            for f in doc.files.all()
+        ],
+    }
+
+
+def _validate_document_payload(doc_type, serial, number, division_code):
+    normalized_serial = _normalize_doc_value(serial)
+    normalized_number = _normalize_doc_value(number)
+    normalized_division = _normalize_doc_value(division_code)
+
+    if doc_type == UserDocument.DOC_PASSPORT_RF:
+        if not re.fullmatch(r'\d{4}', normalized_serial):
+            return False, 'invalid_passport_series', 'Серия паспорта РФ должна содержать 4 цифры.', '', '', ''
+        if not re.fullmatch(r'\d{6}', normalized_number):
+            return False, 'invalid_passport_number', 'Номер паспорта РФ должен содержать 6 цифр.', '', '', ''
+        if normalized_division and not re.fullmatch(r'\d{3}-?\d{3}', normalized_division):
+            return False, 'invalid_division_code', 'Код подразделения должен быть в формате XXX-XXX.', '', '', ''
+        normalized_division = normalized_division if not normalized_division else f"{normalized_division[:3]}-{normalized_division[-3:]}"
+    elif doc_type == UserDocument.DOC_SNILS:
+        if not re.fullmatch(r'\d{11}', normalized_number):
+            return False, 'invalid_snils', 'СНИЛС должен содержать 11 цифр.', '', '', ''
+        normalized_serial = ''
+    elif doc_type == UserDocument.DOC_INN:
+        if not re.fullmatch(r'\d{10}|\d{12}', normalized_number):
+            return False, 'invalid_inn', 'ИНН должен содержать 10 или 12 цифр.', '', '', ''
+        normalized_serial = ''
+    elif doc_type == UserDocument.DOC_FOREIGN_PASSPORT:
+        if not re.fullmatch(r'\d{2}', normalized_serial):
+            return False, 'invalid_foreign_series', 'Серия загранпаспорта должна содержать 2 цифры.', '', '', ''
+        if not re.fullmatch(r'\d{7}', normalized_number):
+            return False, 'invalid_foreign_number', 'Номер загранпаспорта должен содержать 7 цифр.', '', '', ''
+    elif doc_type == UserDocument.DOC_DRIVER_LICENSE:
+        if not re.fullmatch(r'\d{4}', normalized_serial):
+            return False, 'invalid_driver_series', 'Серия водительского удостоверения должна содержать 4 цифры.', '', '', ''
+        if not re.fullmatch(r'\d{6}', normalized_number):
+            return False, 'invalid_driver_number', 'Номер водительского удостоверения должен содержать 6 цифр.', '', '', ''
+    elif doc_type == UserDocument.DOC_MILITARY_ID:
+        if len(normalized_number) < 4:
+            return False, 'invalid_military_number', 'Номер военного билета слишком короткий.', '', '', ''
+        if len(normalized_serial) > 16 or len(normalized_number) > 32:
+            return False, 'invalid_military_fields', 'Серия/номер военного билета указаны некорректно.', '', '', ''
+    else:
+        return False, 'invalid_doc_type', 'Неизвестный тип документа.', '', '', ''
+
+    return True, '', '', normalized_serial, normalized_number, normalized_division
+
+
+@login_required
+def api_profile_documents(request):
+    """Create/list user identity documents attached in profile."""
+    if is_admin_user(request.user) or is_moderator_user(request.user):
+        return JsonResponse({'error': 'forbidden', 'detail': 'Для этой роли раздел документов недоступен.'}, status=403)
+    if not Applicant.objects.filter(user=request.user).exists() and not Manager.objects.filter(user=request.user).exists():
+        return JsonResponse({'error': 'profile_not_found', 'detail': 'Профиль пользователя не найден.'}, status=404)
+
+    if request.method == 'GET':
+        docs = UserDocument.objects.filter(user=request.user).prefetch_related('files')
+        return JsonResponse({'ok': True, 'items': [_serialize_user_document(d) for d in docs]})
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method_not_allowed'}, status=405)
+
+    doc_type = str(request.POST.get('doc_type') or '').strip()
+    serial = str(request.POST.get('serial') or '').strip()
+    number = str(request.POST.get('number') or '').strip()
+    issued_by = str(request.POST.get('issued_by') or '').strip()
+    issued_date_raw = str(request.POST.get('issued_date') or '').strip()
+    division_code = str(request.POST.get('division_code') or '').strip()
+
+    ok, err_code, err_detail, normalized_serial, normalized_number, normalized_division = _validate_document_payload(
+        doc_type,
+        serial,
+        number,
+        division_code,
+    )
+    if not ok:
+        return JsonResponse({'error': err_code, 'detail': err_detail}, status=400)
+
+    files = request.FILES.getlist('files')
+    if not files:
+        return JsonResponse({'error': 'files_required', 'detail': 'Прикрепите хотя бы один файл документа.'}, status=400)
+    if len(files) > DOCUMENT_MAX_FILES:
+        return JsonResponse({'error': 'too_many_files', 'detail': f'Можно прикрепить не более {DOCUMENT_MAX_FILES} файлов.'}, status=400)
+    for f in files:
+        ext = os.path.splitext(f.name or '')[1].lower()
+        if f.size > DOCUMENT_MAX_BYTES:
+            return JsonResponse({'error': 'file_too_large', 'detail': 'Один из файлов превышает 10 МБ.'}, status=400)
+        if (f.content_type not in DOCUMENT_ALLOWED_TYPES) and (ext not in DOCUMENT_ALLOWED_EXTS):
+            return JsonResponse({'error': 'invalid_file_type', 'detail': 'Допустимы только JPG, PNG, WEBP и PDF.'}, status=400)
+
+    issued_date_val = None
+    if issued_date_raw:
+        try:
+            issued_date_val = date.fromisoformat(issued_date_raw)
+        except ValueError:
+            return JsonResponse({'error': 'invalid_issued_date', 'detail': 'Некорректная дата выдачи.'}, status=400)
+
+    doc = UserDocument.objects.create(
+        user=request.user,
+        doc_type=doc_type,
+        serial=normalized_serial,
+        number=normalized_number,
+        issued_date=issued_date_val,
+        issued_by=issued_by,
+        division_code=normalized_division,
+    )
+    for f in files:
+        UserDocumentFile.objects.create(document=doc, file=f)
+
+    _log_api_action(
+        request,
+        action='user_document_create',
+        before={},
+        after={'document_id': doc.pk, 'doc_type': doc.doc_type, 'files': len(files)},
+        endpoint='accounts.api_profile_documents',
+        status_code=201,
+    )
+    doc = UserDocument.objects.filter(pk=doc.pk).prefetch_related('files').first()
+    return JsonResponse({'ok': True, 'item': _serialize_user_document(doc)}, status=201)
+
+
+@login_required
+def api_profile_document_delete(request, pk):
+    """Delete one user document and all attached files."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method_not_allowed'}, status=405)
+    doc = UserDocument.objects.filter(pk=pk, user=request.user).prefetch_related('files').first()
+    if not doc:
+        return JsonResponse({'error': 'not_found', 'detail': 'Документ не найден.'}, status=404)
+
+    doc_type = doc.doc_type
+    doc_id = doc.pk
+    for f in doc.files.all():
+        f.file.delete(save=False)
+    doc.delete()
+    _log_api_action(
+        request,
+        action='user_document_delete',
+        before={'document_id': doc_id, 'doc_type': doc_type},
+        after={'deleted': True},
+        endpoint='accounts.api_profile_document_delete',
+        status_code=200,
+    )
+    return JsonResponse({'ok': True})
 
 
 @swagger_auto_schema(method='get', operation_summary="Данные о станциях метро", tags=['accounts'])
@@ -2247,6 +2440,8 @@ def admin_panel(request):
         'admin_user_role_change': 'Смена роли пользователя администратором',
         'user_feedback_create': 'Новое предложение/критика от пользователя',
         'admin_feedback_action': 'Действие администратора по предложению',
+        'user_document_create': 'Пользователь добавил документ',
+        'user_document_delete': 'Пользователь удалил документ',
     }
     actor_label_map = {
         'system': 'Система',
@@ -3880,10 +4075,17 @@ def api_extra_edu_create(request):
     obj = ExtraEducation.objects.create(
         applicant=applicant,
         name=name,
+        document_serial=(data.get('document_serial') or '').strip(),
         description=(data.get('description') or '').strip(),
         order=order,
     )
-    return JsonResponse({'ok': True, 'id': obj.pk, 'name': obj.name, 'description': obj.description})
+    return JsonResponse({
+        'ok': True,
+        'id': obj.pk,
+        'name': obj.name,
+        'description': obj.description,
+        'document_serial': obj.document_serial,
+    })
 
 
 @swagger_auto_schema(methods=['patch'], operation_summary="Обновить запись о дополнительном образовании", tags=['accounts'])
@@ -3905,8 +4107,16 @@ def api_extra_edu_crud(request, pk):
         obj.name = val
     if 'description' in data:
         obj.description = (data.get('description') or '').strip()
+    if 'document_serial' in data:
+        obj.document_serial = (data.get('document_serial') or '').strip()
     obj.save()
-    return JsonResponse({'ok': True, 'id': obj.pk, 'name': obj.name, 'description': obj.description})
+    return JsonResponse({
+        'ok': True,
+        'id': obj.pk,
+        'name': obj.name,
+        'description': obj.description,
+        'document_serial': obj.document_serial,
+    })
 
 
 @swagger_auto_schema(method='post', operation_summary="Добавить место работы", tags=['accounts'])

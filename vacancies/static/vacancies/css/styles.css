@@ -2767,6 +2767,11 @@ input[type="checkbox"]:focus-visible {
   color: var(--text-secondary);
   margin: 0 0 6px;
 }
+.p-card-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+}
 .p-card-desc {
   font-size: 13px;
   color: var(--text-secondary);

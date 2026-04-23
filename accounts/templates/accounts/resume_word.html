@@ -122,6 +122,7 @@
         {% for x in extra_educations %}
         <div class="r-row">
             <div class="r-row-title">{{ x.name }}</div>
+            {% if x.document_serial %}<div class="r-row-body">Серийный номер документа: {{ x.document_serial }}</div>{% endif %}
             {% if x.description %}<div class="r-row-body">{{ x.description }}</div>{% endif %}
         </div>
         {% endfor %}

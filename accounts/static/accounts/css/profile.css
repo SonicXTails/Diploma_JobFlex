@@ -151,6 +151,197 @@
         color: #fff;
     }
 
+    /* ── Profile documents section ───────────────────────────── */
+    .p-docs .p-section__header {
+        border-bottom: 1px solid var(--card-border);
+    }
+    .p-docs__hint {
+        margin: 0 0 12px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+    .p-docs__form {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .p-docs__row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .p-docs__field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+    }
+    .p-docs__field--wide {
+        grid-column: span 2;
+    }
+    .p-docs__label {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .p-docs__select,
+    .p-docs__input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1.5px solid var(--card-border);
+        border-radius: 10px;
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 13px;
+        font-family: inherit;
+        padding: 8px 10px;
+    }
+    .p-docs__select:focus,
+    .p-docs__input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(201,100,66,.14);
+    }
+    .p-docs__file-native {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .p-docs__file-picker {
+        width: 100%;
+        min-height: 40px;
+        box-sizing: border-box;
+        border: 1.5px solid var(--card-border);
+        border-radius: 10px;
+        background: var(--input-bg);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 8px;
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .p-docs__file-picker:hover {
+        border-color: var(--accent);
+    }
+    .p-docs__file-btn {
+        border: 1.5px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 10px;
+        white-space: nowrap;
+        transition: border-color .15s, color .15s;
+    }
+    .p-docs__file-picker:hover .p-docs__file-btn {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+    .p-docs__file-caption {
+        font-size: 12px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    .p-docs__actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .p-docs__status {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .p-docs__list {
+        display: grid;
+        gap: 10px;
+    }
+    .p-docs__empty {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .p-docs-item {
+        border: 1.5px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--surface);
+        padding: 10px 12px;
+        display: grid;
+        gap: 8px;
+    }
+    .p-docs-item__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .p-docs-item__title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+    }
+    .p-docs-item__delete {
+        border: 1.5px solid #c44a4a;
+        background: transparent;
+        color: #c44a4a;
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .p-docs-item__delete:hover {
+        background: #c44a4a;
+        color: #fff;
+    }
+    .p-docs-item__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .p-docs-item__issued-by {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .p-docs-item__files {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .p-docs-file {
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+        color: var(--text);
+        text-decoration: none;
+        background: var(--bg);
+    }
+    .p-docs-file:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+    .p-docs-file--empty {
+        color: var(--text-secondary);
+        pointer-events: none;
+    }
+    @media (max-width: 920px) {
+        .p-docs__row {
+            grid-template-columns: 1fr;
+        }
+        .p-docs__field--wide {
+            grid-column: auto;
+        }
+    }
+
     /* ══════ FULLSCREEN CALENDAR ══════ */
     .cal-fs-open-btn {
         background: transparent;
