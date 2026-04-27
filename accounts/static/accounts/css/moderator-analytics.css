@@ -56,6 +56,24 @@
     margin-bottom: 10px;
 }
 .mod-filter-bar label { font-size: 12px; color: var(--text-secondary); }
+/* Тот же кастомный select, что и на сайте (vacancies/js/custom-select.js + .cs-* в styles.css) */
+.mod-filter-bar .cs-wrap {
+    min-width: min(100%, 260px);
+    flex: 1 1 200px;
+    max-width: 320px;
+}
+.mod-card-state .cs-wrap {
+    width: 100%;
+    min-width: 0;
+}
+.mod-card-state .cs-trigger {
+    font-size: 13px;
+    padding: 7px 10px;
+}
+.mod-vacancy-card,
+.mod-card-state {
+    overflow: visible;
+}
 .mod-vacancy-card {
     border: 1px solid var(--card-border);
     border-radius: 12px;
