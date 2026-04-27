@@ -325,12 +325,12 @@ class VacancyReport(models.Model):
 		(SELF_STATUS_DONE, 'Обработано'),
 	]
 
-	vacancy = models.ForeignKey('Vacancy', on_delete=models.CASCADE, related_name='reports')
-	user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='vacancy_reports')
-	reason_code = models.CharField(max_length=64, choices=REASON_CHOICES)
-	reason_text = models.TextField(blank=True)
-	self_status = models.CharField(max_length=16, choices=SELF_STATUS_CHOICES, default=SELF_STATUS_NEW)
-	moderator_note = models.TextField(blank=True)
+	vacancy = models.ForeignKey('Vacancy', on_delete=models.CASCADE, related_name='reports', verbose_name='Вакансия')
+	user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='vacancy_reports', verbose_name='Пользователь')
+	reason_code = models.CharField('Причина', max_length=64, choices=REASON_CHOICES)
+	reason_text = models.TextField('Комментарий', blank=True)
+	self_status = models.CharField('Статус', max_length=16, choices=SELF_STATUS_CHOICES, default=SELF_STATUS_NEW)
+	moderator_note = models.TextField('Заметка модератора', blank=True)
 	reviewed_by = models.ForeignKey(
 		'auth.User',
 		null=True,
@@ -338,9 +338,9 @@ class VacancyReport(models.Model):
 		on_delete=models.SET_NULL,
 		related_name='reviewed_vacancy_reports',
 	)
-	reviewed_at = models.DateTimeField(null=True, blank=True)
-	created_at = models.DateTimeField(auto_now_add=True)
-	updated_at = models.DateTimeField(auto_now=True)
+	reviewed_at = models.DateTimeField('Проверено', null=True, blank=True)
+	created_at = models.DateTimeField('Создано', auto_now_add=True)
+	updated_at = models.DateTimeField('Обновлено', auto_now=True)
 
 	class Meta:
 		ordering = ('-created_at',)

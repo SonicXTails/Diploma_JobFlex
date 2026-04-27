@@ -11,11 +11,11 @@ class Applicant(models.Model):
         ('AZ', 'Азербайджан'), ('TM', 'Туркменистан'),
     ]
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='applicant')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='applicant', verbose_name='Пользователь')
     patronymic = models.CharField('Отчество', max_length=150, blank=True)
-    telegram = models.CharField('Telegram', max_length=100)
-    telegram_chat_id = models.BigIntegerField('Telegram chat id', null=True, blank=True)
-    telegram_start_token = models.CharField('Telegram start token', max_length=64, null=True, blank=True, unique=True)
+    telegram = models.CharField('Телеграм', max_length=100)
+    telegram_chat_id = models.BigIntegerField('ID чата Telegram', null=True, blank=True)
+    telegram_start_token = models.CharField('Стартовый токен Telegram', max_length=64, null=True, blank=True, unique=True)
     consent_email = models.BooleanField('Согласие на e-mail', default=False)
     consent_telegram = models.BooleanField('Согласие на Telegram', default=False)
     phone = models.CharField('Телефон', max_length=30, blank=True)
@@ -52,6 +52,10 @@ class Applicant(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name()} <{self.user.email}>"
+
+    class Meta:
+        verbose_name = 'Соискатель'
+        verbose_name_plural = 'Соискатели'
 
 
 class Education(models.Model):
@@ -127,12 +131,12 @@ class WorkExperience(models.Model):
 
 
 class Manager(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager', verbose_name='Пользователь')
     patronymic = models.CharField('Отчество', max_length=150, blank=True)
     company = models.CharField('Компания', max_length=255, blank=True)
     phone = models.CharField('Телефон', max_length=30, blank=True)
-    telegram = models.CharField('Telegram', max_length=100, blank=True)
-    telegram_chat_id = models.BigIntegerField('Telegram chat id', null=True, blank=True)
+    telegram = models.CharField('Телеграм', max_length=100, blank=True)
+    telegram_chat_id = models.BigIntegerField('ID чата Telegram', null=True, blank=True)
     consent_email    = models.BooleanField('Согласие на e-mail', default=False)
     consent_telegram = models.BooleanField('Согласие на Telegram', default=False)
     avatar       = models.ImageField('Аватар', upload_to='avatars/%Y/', null=True, blank=True)
@@ -387,12 +391,12 @@ class Interview(models.Model):
 class ApiActionLog(models.Model):
     """Audit log for selected non-frequent API actions."""
     ACTOR_CHOICES = [
-        ('system', 'System'),
-        ('admin', 'Admin'),
-        ('moderator', 'Moderator'),
-        ('manager', 'Manager'),
-        ('applicant', 'Applicant'),
-        ('user', 'User'),
+        ('system', 'Система'),
+        ('admin', 'Администратор'),
+        ('moderator', 'Модератор'),
+        ('manager', 'Менеджер'),
+        ('applicant', 'Соискатель'),
+        ('user', 'Пользователь'),
     ]
 
     user = models.ForeignKey(
@@ -402,17 +406,17 @@ class ApiActionLog(models.Model):
         null=True,
         blank=True,
     )
-    actor_role = models.CharField(max_length=20, choices=ACTOR_CHOICES, default='system')
-    method = models.CharField(max_length=10)
-    path = models.CharField(max_length=255)
-    endpoint = models.CharField(max_length=120, blank=True)
-    action = models.CharField(max_length=120)
-    success = models.BooleanField(default=True)
-    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
-    before_data = models.JSONField(default=dict, blank=True)
-    after_data = models.JSONField(default=dict, blank=True)
-    meta = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    actor_role = models.CharField('Роль', max_length=20, choices=ACTOR_CHOICES, default='system')
+    method = models.CharField('HTTP-метод', max_length=10)
+    path = models.CharField('Путь', max_length=255)
+    endpoint = models.CharField('Эндпоинт', max_length=120, blank=True)
+    action = models.CharField('Действие', max_length=120)
+    success = models.BooleanField('Успешно', default=True)
+    status_code = models.PositiveSmallIntegerField('Код ответа', null=True, blank=True)
+    before_data = models.JSONField('До изменения', default=dict, blank=True)
+    after_data = models.JSONField('После изменения', default=dict, blank=True)
+    meta = models.JSONField('Метаданные', default=dict, blank=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
