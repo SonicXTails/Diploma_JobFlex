@@ -43,15 +43,27 @@ class IsAdminUserWithProfile(permissions.BasePermission):
 
 
 api_info = openapi.Info(
-    title="Job Aggregator API",
+    title="JobFlex — API агрегатора вакансий",
     default_version='v1',
     description=(
-        "REST API для системы агрегации вакансий.\n\n"
-        "**accounts/** — регистрация, авторизация, профиль пользователя, Telegram-интеграция.\n\n"
-        "**vacancies/** — список вакансий, детальная страница, рейтинг работодателей.\n\n"
-        "⚠️ Swagger UI доступен только администраторам системы."
+        "Документация REST API платформы JobFlex (агрегация вакансий, профили, модерация).\n\n"
+        "## Как пользоваться из Swagger UI и ReDoc\n\n"
+        "1. **Сессия.** Большинство методов требуют авторизации через cookie `sessionid`. "
+        "Сначала выполните `POST /accounts/api/login/` (или войдите через сайт), "
+        "затем в интерфейсе нажмите **Authorize** и выберите схему **Session**.\n\n"
+        "2. **CSRF.** Для изменяющих запросов (POST, PUT, PATCH, DELETE) из браузера нужен заголовок "
+        "`X-CSRFToken` с тем же значением, что и cookie `csrftoken`. После входа через Swagger/ReDoc "
+        "заголовок обычно подставляется автоматически.\n\n"
+        "3. **Примеры.** У каждой операции в описании приведены примеры тел запросов и ответов в Markdown "
+        "(ReDoc и Swagger отображают их под заголовком операции).\n\n"
+        "## Разделы\n\n"
+        "- **accounts** — регистрация, вход, профиль, файлы, отклики, чаты, календарь, собеседования.\n"
+        "- **vacancies / moderation** — жалобы, модерация, мягкое удаление вакансий.\n"
+        "- **api** — вспомогательные публичные методы (описание вакансии, рейтинг работодателя).\n\n"
+        "⚠️ **Доступ к этой странице документации** (Swagger и ReDoc) разрешён только администраторам "
+        "с профилем в системе."
     ),
-    contact=openapi.Contact(email="admin@jobapp.local"),
+    contact=openapi.Contact(name="Поддержка JobFlex", email="admin@jobapp.local"),
 )
 
 schema_view = get_schema_view(

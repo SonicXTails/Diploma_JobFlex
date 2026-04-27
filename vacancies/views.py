@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.views.generic import ListView, DetailView
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
@@ -1421,6 +1421,9 @@ def vacancy_delete(request, pk):
 	return redirect('vacancy-detail', pk=vac.external_id)
 
 
+@swagger_auto_schema(method='post', operation_summary="Пожаловаться на вакансию", tags=['vacancies'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_vacancy_report(request, pk):
 	"""Create a complaint for a site-created vacancy (one report per user)."""
@@ -1459,6 +1462,10 @@ def api_vacancy_report(request, pk):
 	return JsonResponse({'ok': True, 'already_reported': False, 'id': report.pk})
 
 
+@swagger_auto_schema(methods=['post'], operation_summary="Обновить статус жалобы (модератор)", tags=['moderation'])
+@swagger_auto_schema(methods=['patch'], operation_summary="Обновить статус жалобы (модератор, PATCH)", tags=['moderation'])
+@api_view(['POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_report_self_status_update(request, pk):
 	"""Moderator-only endpoint: update personal processing fields for a report."""
@@ -1486,6 +1493,10 @@ def api_report_self_status_update(request, pk):
 	return JsonResponse({'ok': True})
 
 
+@swagger_auto_schema(methods=['post'], operation_summary="Обновить статус модерации вакансии", tags=['moderation'])
+@swagger_auto_schema(methods=['patch'], operation_summary="Обновить статус модерации вакансии (PATCH)", tags=['moderation'])
+@api_view(['POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_vacancy_moderation_update(request, vacancy_id):
 	"""Moderator-only endpoint: update card-level vacancy moderation status and note."""
@@ -1545,6 +1556,9 @@ def _compute_dominant_report_reason(vacancy):
 	return (code, label)
 
 
+@swagger_auto_schema(method='post', operation_summary="Мягкое удаление вакансии модератором", tags=['moderation'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_moderator_delete_vacancy(request, vacancy_id):
 	"""Moderator-only: soft-delete a vacancy and record a deletion report.
@@ -1663,6 +1677,9 @@ def api_moderator_delete_vacancy(request, vacancy_id):
 	})
 
 
+@swagger_auto_schema(method='post', operation_summary="Восстановить вакансию после удаления модератором", tags=['moderation'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_moderator_report_restore(request, report_id):
 	"""Admin-only: restore a vacancy that was soft-deleted by a moderator."""
@@ -1690,7 +1707,9 @@ def api_moderator_report_restore(request, report_id):
 	return JsonResponse({'ok': True})
 
 
+@swagger_auto_schema(method='patch', operation_summary="Включить/выключить активность вакансии", tags=['vacancies'])
 @api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_vacancy_toggle_active(request, pk):
     """Toggle the is_active flag for a manager's own vacancy."""

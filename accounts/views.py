@@ -940,6 +940,10 @@ def _validate_document_payload(doc_type, serial, number, division_code):
     return True, '', '', normalized_serial, normalized_number, normalized_division
 
 
+@swagger_auto_schema(methods=['get'], operation_summary="Список документов пользователя", tags=['documents'])
+@swagger_auto_schema(methods=['post'], operation_summary="Добавить документ пользователя", tags=['documents'])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_profile_documents(request):
     """Create/list user identity documents attached in profile."""
@@ -1014,6 +1018,9 @@ def api_profile_documents(request):
     return JsonResponse({'ok': True, 'item': _serialize_user_document(doc)}, status=201)
 
 
+@swagger_auto_schema(method='post', operation_summary="Удалить документ пользователя", tags=['documents'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_profile_document_delete(request, pk):
     """Delete one user document and all attached files."""
@@ -1312,6 +1319,9 @@ def _check_upload(f):
     return None
 
 
+@swagger_auto_schema(method='post', operation_summary="Загрузить аватар пользователя", tags=['accounts'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_upload_avatar(request):
     """Upload / replace user avatar.
@@ -1359,6 +1369,9 @@ def api_upload_avatar(request):
     return JsonResponse({'ok': True, 'url': saved_url})
 
 
+@swagger_auto_schema(method='post', operation_summary="Загрузить логотип компании", tags=['accounts'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_upload_company_logo(request):
     """Upload / replace company logo (managers only)."""
@@ -1388,6 +1401,9 @@ RESUME_ALLOWED_TYPES = {
 RESUME_ALLOWED_EXTS = {'.docx', '.doc'}
 
 
+@swagger_auto_schema(method='post', operation_summary="Загрузить резюме (Word)", tags=['accounts'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_upload_resume(request):
     """Upload a Word resume file (.docx / .doc) for the logged-in applicant."""
@@ -1416,6 +1432,9 @@ def api_upload_resume(request):
     })
 
 
+@swagger_auto_schema(method='post', operation_summary="Удалить загруженное резюме", tags=['accounts'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_delete_resume(request):
     """DELETE the uploaded Word resume file for the logged-in applicant."""
@@ -1433,6 +1452,9 @@ def api_delete_resume(request):
 
 # ─── Bookmarks ────────────────────────────────────────────────────────────────
 
+@swagger_auto_schema(method='post', operation_summary="Добавить/убрать вакансию из закладок", tags=['accounts'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_toggle_bookmark(request, pk):
     """POST – toggle bookmark on a vacancy. Returns {'ok', 'bookmarked'}."""
@@ -1452,6 +1474,9 @@ def api_toggle_bookmark(request, pk):
 
 # ─── Applicant analytics ──────────────────────────────────────────────────────
 
+@swagger_auto_schema(method='get', operation_summary="Персональная аналитика соискателя", tags=['accounts'])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_applicant_analytics(request):
     """Return personal analytics: bookmarks, viewed vacancies, profile data for charts."""
@@ -2724,6 +2749,9 @@ def admin_panel(request):
     })
 
 
+@swagger_auto_schema(method='post', operation_summary="Действие над предложением/критикой (архив/отклонить/реализовать/вернуть)", tags=['admin'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @admin_required
 def api_admin_feedback_action(request, feedback_id):
     """Admin workflow for feedback messages: archive/reject/resolve/restore."""
@@ -3391,6 +3419,9 @@ def admin_profile_page(request):
     return redirect('accounts:admin_panel')
 
 
+@swagger_auto_schema(method='post', operation_summary="Создать резервную копию базы данных", tags=['admin'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @admin_required
 def api_admin_backup_create(request):
     """POST — create an immediate database backup; return filename and size."""
@@ -3454,6 +3485,9 @@ def api_admin_backup_create(request):
     })
 
 
+@swagger_auto_schema(method='post', operation_summary="Восстановить базу данных из резервной копии", tags=['admin'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @admin_required
 def api_admin_backup_restore(request):
     """POST {filename} — restore the SQLite database from a named backup file.
@@ -3567,6 +3601,9 @@ def api_admin_backup_restore(request):
     return JsonResponse({'ok': True, 'restored_from': filename})
 
 
+@swagger_auto_schema(method='post', operation_summary="Удалить резервную копию базы данных", tags=['admin'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @admin_required
 def api_admin_backup_delete(request):
     """POST {filename} — delete a named backup file.
@@ -4566,6 +4603,9 @@ def api_preset_detail(request, pk):
 #  Calendar API
 # ────────────────────────────────────────────────────────────
 
+@swagger_auto_schema(method='get', operation_summary="События календаря (по дате)", tags=['calendar'])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_calendar_events(request):
     """GET ?date=YYYY-MM-DD — role-aware calendar events.
@@ -4746,6 +4786,11 @@ def api_calendar_events(request):
     return JsonResponse({'ok': True, 'events': events, 'month_marks': month_marks, 'is_manager': is_mgr})
 
 
+@swagger_auto_schema(methods=['post'], operation_summary="Создать заметку в календаре", tags=['calendar'])
+@swagger_auto_schema(methods=['patch'], operation_summary="Обновить заметку в календаре", tags=['calendar'])
+@swagger_auto_schema(methods=['delete'], operation_summary="Удалить заметку из календаря", tags=['calendar'])
+@api_view(['POST', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_calendar_note_save(request):
     """POST {date, title?, text?, color?, time?} — create a note.
@@ -4934,6 +4979,9 @@ def api_calendar_note_save(request):
     return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
 
+@swagger_auto_schema(method='get', operation_summary="Экспорт событий календаря за месяц", tags=['calendar'])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_calendar_month_export(request):
     """GET ?year=Y&month=M — all notes + interviews for the month (for .ics export / week-view preload)."""
@@ -4983,6 +5031,9 @@ def api_calendar_month_export(request):
     return JsonResponse({'ok': True, 'events': events})
 
 
+@swagger_auto_schema(method='get', operation_summary="Индекс заметок календаря (поиск)", tags=['calendar'])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_calendar_notes_index(request):
     """GET — global note index for calendar search (all dates for current user)."""
@@ -5000,6 +5051,9 @@ def api_calendar_notes_index(request):
     return JsonResponse({'ok': True, 'events': notes})
 
 
+@swagger_auto_schema(method='post', operation_summary="Назначить собеседование", tags=['interviews'])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_interview_schedule(request):
     """POST {applicant_user_id, vacancy_id, date, time, location, notes} — schedule an interview."""
@@ -5211,6 +5265,9 @@ def api_interview_schedule(request):
     return JsonResponse({'ok': True, 'id': itv.pk})
 
 
+@swagger_auto_schema(method='delete', operation_summary="Отменить собеседование", tags=['interviews'])
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_interview_cancel(request):
     """DELETE {id} — cancel a scheduled interview (manager OR applicant)."""
@@ -5369,6 +5426,9 @@ def api_interview_cancel(request):
     return JsonResponse({'ok': True})
 
 
+@swagger_auto_schema(method='patch', operation_summary="Перенести собеседование", tags=['interviews'])
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_interview_reschedule(request):
     """PATCH {id, date, time} — reschedule an interview (manager only)."""
@@ -5499,6 +5559,9 @@ def api_interview_reschedule(request):
     return JsonResponse({'ok': True})
 
 
+@swagger_auto_schema(method='get', operation_summary="События календаря менеджера", tags=['calendar'])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 @login_required
 def api_manager_calendar_events(request):
     """GET ?date=YYYY-MM-DD — return applications on manager's vacancies, interviews and notes."""

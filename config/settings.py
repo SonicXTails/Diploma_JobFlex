@@ -76,6 +76,19 @@ SWAGGER_SETTINGS = {
     'LOGIN_URL': '/accounts/login/',
     'LOGOUT_URL': '/accounts/logout/',
     'DEFAULT_INFO': 'config.urls.api_info',
+    'DEFAULT_GENERATOR_CLASS': 'config.openapi_generator.RussianOpenAPISchemaGenerator',
+}
+
+# Документация ReDoc (тот же OpenAPI, что и у Swagger)
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
+    'HIDE_HOSTNAME': False,
+    'EXPAND_RESPONSES': 'all',
+    'PATH_IN_MIDDLE': False,
+    'NATIVE_SCROLLBARS': False,
+    'REQUIRED_PROPS_FIRST': True,
+    'HIDE_DOWNLOAD_BUTTON': False,
+    'FETCH_SCHEMA_WITH_QUERY': True,
 }
 
 MIDDLEWARE = [
