@@ -10,8 +10,8 @@ from django.db.models import Q as models_Q
 from django.utils import timezone
 
 from vacancies.models import Employer
+from vacancies.hh_client import hh_openapi_headers
 
-USER_AGENT = 'job-aggregator-diploma/1.0'
 _RATING_PAT = r'totalRating["\']?\s*:\s*["\']?([0-5](?:[\.,][0-9]{1,2})?)["\']?'
 _DJID_PAT = r'employerDjId["\']?\s*:\s*["\']?(\d+)["\']?'
 
@@ -32,7 +32,7 @@ def _parse_rating(raw) -> float | None:
 
 
 def fetch_employer_page(url: str) -> str:
-    req = Request(url, headers={'User-Agent': USER_AGENT})
+    req = Request(url, headers=hh_openapi_headers())
     with urlopen(req, timeout=20) as r:
         return r.read().decode('utf-8')
 
@@ -161,7 +161,7 @@ class Command(BaseCommand):
         if emp.hh_id:
             try:
                 req = Request(f'https://api.hh.ru/employers/{emp.hh_id}',
-                              headers={'User-Agent': USER_AGENT})
+                              headers=hh_openapi_headers())
                 with urlopen(req, timeout=10) as r:
                     data = json.loads(r.read().decode('utf-8'))
                 for k in ('hh_rating', 'rating', 'ratingValue', 'rating_raw'):

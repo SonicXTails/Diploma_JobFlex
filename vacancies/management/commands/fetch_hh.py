@@ -1,17 +1,26 @@
 import json
+import sys
 from datetime import datetime
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.core.management.base import BaseCommand
+from django.core.cache import cache
 from django.db import transaction
+from django.utils import timezone
 
 from vacancies.models import Vacancy, Employer
+from vacancies.hh_client import hh_openapi_headers
 
 
 
 
 class Command(BaseCommand):
+    LAST_TS_CACHE_KEY = "hh_last_published_at_iso"
+    def _console_safe(self, message: str) -> str:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        return message.encode(enc, errors="replace").decode(enc)
+
     help = "Fetch vacancies from HH API and save to database"
     DEFAULT_TEXTS = [
         "продавец",
@@ -48,34 +57,52 @@ class Command(BaseCommand):
         area = options["area"]
 
         query_list = self._build_query_list(text, texts, use_default_texts)
+        incremental_mode = (not text and not texts and not use_default_texts and area is None)
+        since_dt = self._read_cursor() if incremental_mode else None
 
         created_total = 0
         updated_total = 0
+        newest_seen = since_dt
 
         for query in query_list:
             query_title = query or "<all>"
-            self.stdout.write(f"Query: {query_title}")
+            self.stdout.write(self._console_safe(f"Query: {query_title}"))
 
-            first_page_payload = self._fetch_page(query, area, per_page, 0)
+            first_page_payload = self._fetch_page(query, area, per_page, 0, since_dt=since_dt)
             total_pages = min(first_page_payload.get("pages", 1), pages)
 
-            created_count, updated_count = self._save_items(first_page_payload.get("items", []))
+            first_items = first_page_payload.get("items", [])
+            if incremental_mode and not self._has_new_ids(first_items):
+                self.stdout.write(self._console_safe("  Page 1: no new ids, stop incremental scan"))
+                continue
+            created_count, updated_count = self._save_items(first_items)
+            newest_seen = self._max_dt(newest_seen, self._max_published(first_items))
             created_total += created_count
             updated_total += updated_count
-            self.stdout.write(f"  Page 1/{total_pages}: created={created_count}, updated={updated_count}")
+            self.stdout.write(self._console_safe(
+                f"  Page 1/{total_pages}: created={created_count}, updated={updated_count}"
+            ))
 
             for page in range(1, total_pages):
-                payload = self._fetch_page(query, area, per_page, page)
+                payload = self._fetch_page(query, area, per_page, page, since_dt=since_dt)
                 items = payload.get("items", [])
                 if not items:
                     break
+                if since_dt and not self._has_newer(items, since_dt):
+                    break
+                if incremental_mode and not self._has_new_ids(items):
+                    break
 
                 created_count, updated_count = self._save_items(items)
+                newest_seen = self._max_dt(newest_seen, self._max_published(items))
                 created_total += created_count
                 updated_total += updated_count
-                self.stdout.write(
+                self.stdout.write(self._console_safe(
                     f"  Page {page + 1}/{total_pages}: created={created_count}, updated={updated_count}"
-                )
+                ))
+
+        if incremental_mode and newest_seen:
+            self._write_cursor(newest_seen)
 
         self.stdout.write(self.style.SUCCESS(
             f"Done. Created={created_total}, Updated={updated_total}, Total in DB={Vacancy.objects.count()}"
@@ -94,7 +121,7 @@ class Command(BaseCommand):
 
         return [""]
 
-    def _fetch_page(self, query, area, per_page, page):
+    def _fetch_page(self, query, area, per_page, page, since_dt=None):
         params = {
             "page": page,
             "per_page": per_page,
@@ -104,11 +131,13 @@ class Command(BaseCommand):
             params["text"] = query
         if area:
             params["area"] = area
+        if since_dt:
+            params["date_from"] = since_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         return self._fetch("https://api.hh.ru/vacancies", params)
 
     def _fetch(self, base_url, params):
         url = f"{base_url}?{urlencode(params)}"
-        request = Request(url, headers={"User-Agent": "job-aggregator-diploma/1.0"})
+        request = Request(url, headers=hh_openapi_headers())
         with urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
 
@@ -230,5 +259,46 @@ class Command(BaseCommand):
 
     def _parse_dt(self, value):
         if not value:
-            return datetime.now().astimezone()
+            return timezone.now()
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    def _max_published(self, items):
+        best = None
+        for item in items or []:
+            dt = self._parse_dt(item.get("published_at"))
+            best = self._max_dt(best, dt)
+        return best
+
+    def _max_dt(self, a, b):
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return a if a >= b else b
+
+    def _has_newer(self, items, since_dt):
+        for item in items or []:
+            if self._parse_dt(item.get("published_at")) > since_dt:
+                return True
+        return False
+
+    def _read_cursor(self):
+        raw = (cache.get(self.LAST_TS_CACHE_KEY) or "").strip()
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw)
+        except Exception:
+            return None
+
+    def _write_cursor(self, dt):
+        cache.set(self.LAST_TS_CACHE_KEY, dt.astimezone(timezone.utc).isoformat(), timeout=60 * 60 * 24 * 30)
+
+    def _has_new_ids(self, items):
+        ids = [str(item.get("id") or "") for item in (items or []) if item.get("id")]
+        if not ids:
+            return False
+        existing_ids = set(
+            Vacancy.objects.filter(external_id__in=ids).values_list("external_id", flat=True)
+        )
+        return any(item_id not in existing_ids for item_id in ids)

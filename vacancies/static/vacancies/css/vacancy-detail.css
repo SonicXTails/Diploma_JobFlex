@@ -246,6 +246,8 @@
             background: var(--accent); color: #fff;
             border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
             cursor: pointer; text-decoration: none;
+            white-space: nowrap;
+            line-height: 1.2;
             transition: background .15s, transform .1s;
         }
         .btn-apply:hover { background: var(--accent-hover); transform: translateY(-1px); }
@@ -387,7 +389,25 @@
         .vd-description li  { margin-bottom: 5px; }
         .vd-description p   { margin: 0 0 10px; }
         .vd-description strong,.vd-description b { font-weight: 600; }
-        /* Dark-mode: strip any hh.ru inline color styles from plain HTML */
+        .tv-desc {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .tv-block {
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            background: var(--surface);
+        }
+        .tv-block h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .tv-block p:last-child { margin-bottom: 0; }
+        /* Dark-mode: neutralize aggressive inline colors from imported HTML */
         .theme-dark .vd-description,
         .theme-dark .vd-description h1,
         .theme-dark .vd-description h2,

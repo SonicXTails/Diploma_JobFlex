@@ -4,6 +4,7 @@ from urllib.request import Request, urlopen
 from django.core.management.base import BaseCommand
 
 from vacancies.models import HhArea, HhDictionaryItem
+from vacancies.hh_client import hh_openapi_headers
 
 
 class Command(BaseCommand):
@@ -23,7 +24,7 @@ class Command(BaseCommand):
         ))
 
     def _fetch_json(self, url):
-        request = Request(url, headers={"User-Agent": "job-aggregator-diploma/1.0"})
+        request = Request(url, headers=hh_openapi_headers())
         with urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
 

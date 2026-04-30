@@ -15,6 +15,7 @@ from urllib.error import HTTPError
 from django.core.management.base import BaseCommand
 
 from vacancies.models import Vacancy
+from vacancies.hh_client import hh_openapi_headers
 
 
 class Command(BaseCommand):
@@ -83,7 +84,7 @@ class Command(BaseCommand):
 
             url = f"https://api.hh.ru/vacancies/{hh_id}"
             try:
-                req = Request(url, headers={"User-Agent": "job-aggregator-diploma/1.0"})
+                req = Request(url, headers=hh_openapi_headers())
                 with urlopen(req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
             except HTTPError as e:

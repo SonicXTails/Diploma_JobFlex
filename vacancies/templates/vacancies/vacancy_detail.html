@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="{% static 'vacancies/css/base-ui.css' %}">
     
     <link rel="stylesheet" href="{% static 'vacancies/css/vacancy-detail.css' %}">
-    {% if not prefetched_rating %}
+    {% if is_hh_source and not prefetched_rating %}
     <script>
     /* Early-fire rating fetch so it runs in parallel with DOM parsing */
     var _hhId = '{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id|escapejs }}{% endif %}';
@@ -85,6 +85,7 @@
                         {% endif %}
                         <div class="vd-hero-info">
                             <h1 class="vd-title">{{ vacancy.title }}</h1>
+                            <div class="vd-company vd-company-static">Источник: {{ source_label }}</div>
                             {% if vacancy.url %}
                                 <a class="vd-company" href="{{ vacancy.url }}" target="_blank" rel="noopener">{{ vacancy.company }}</a>
                             {% else %}
@@ -149,6 +150,9 @@
                 <!-- Description card (lazy-loaded) -->
                 <div class="vd-card" id="desc-card">
                     <h2 class="vd-card-title">Описание вакансии</h2>
+                    <p class="vd-side-note vd-side-note--tight">
+                        {% if is_hh_source %}Источник описания: HeadHunter{% elif is_trudvsem_source %}Источник описания: Работа России{% else %}Источник описания: локальная вакансия{% endif %}
+                    </p>
                     <div id="desc-body">
                         {% if vacancy.branded_description %}
                             {# iframe = full style isolation: employer <style> tags cannot leak #}
@@ -159,6 +163,8 @@
                                     sandbox="allow-scripts allow-same-origin"
                                     loading="lazy"
                             ></iframe>
+                        {% elif trudvsem_description_html %}
+                            <div class="vd-description">{{ trudvsem_description_html|safe }}</div>
                         {% elif vacancy.description %}
                             <div class="vd-description">{{ vacancy.description|safe }}</div>
                         {% else %}
@@ -234,14 +240,13 @@
                 </div>
                 {% endif %}
 
-                {% if vacancy.is_hh %}
-                {# ── HH.ru vacancy: only external apply link ── #}
+                {% if is_external_source %}
                 <div class="sidebar-card">
                     <a class="btn-apply" href="{{ vacancy.url }}" target="_blank" rel="noopener">
-                        Откликнуться на hh.ru ↗
+                        Откликнуться на источнике ↗
                     </a>
                     <p class="vd-side-note">
-                        Откроется на сайте hh.ru
+                        Откроется на внешнем сайте вакансии
                     </p>
                 </div>
                 {% else %}
@@ -325,14 +330,19 @@
                             {% if vacancy.region %}<div class="emp-region">{{ vacancy.region }}</div>{% endif %}
                         </div>
                     </div>
-                    <div class="vd-rating-label">Рейтинг работодателя:</div>
-                    <div class="vd-rating-wrap" id="emp-rating">
-                        {% if prefetched_rating %}
-                        <span class="rating-none">{{ prefetched_rating }}</span>
-                        {% else %}
-                        <span class="rating-none">загружается…</span>
-                        {% endif %}
-                    </div>
+                    {% if is_hh_source %}
+                        <div class="vd-rating-label">Рейтинг работодателя:</div>
+                        <div class="vd-rating-wrap" id="emp-rating">
+                            {% if prefetched_rating %}
+                            <span class="rating-none">{{ prefetched_rating }}</span>
+                            {% else %}
+                            <span class="rating-none">загружается…</span>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="vd-rating-label">Рейтинг работодателя:</div>
+                        <div class="vd-rating-wrap"><span class="rating-none">(недоступен для источника)</span></div>
+                    {% endif %}
                 </div>
 
                 <!-- Vacancy meta card -->
@@ -732,7 +742,7 @@
     {% endif %}
     </script>
 
-    {% if not vacancy.branded_description and not vacancy.description %}
+    {% if is_hh_source and not vacancy.branded_description and not vacancy.description and not trudvsem_description_html %}
     <script>
     /* ── Lazy description loader ──────────────────────── */
     (function() {

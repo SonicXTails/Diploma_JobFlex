@@ -324,6 +324,8 @@
                                 <div class="radio-group">
                                     <label class="radio"><input type="radio" name="source" value="" {% if not source %}checked{% endif %}> Все</label>
                                     <label class="radio"><input type="radio" name="source" value="hh" {% if source == 'hh' %}checked{% endif %}> Только hh.ru</label>
+                                    <label class="radio"><input type="radio" name="source" value="trudvsem" {% if source == 'trudvsem' %}checked{% endif %}> Только Работа России</label>
+                                    <label class="radio"><input type="radio" name="source" value="external" {% if source == 'external' %}checked{% endif %}> Все внешние</label>
                                     <label class="radio"><input type="radio" name="source" value="local" {% if source == 'local' %}checked{% endif %}> Только размещённые на сайте</label>
                                 </div>
                             </div>
@@ -362,6 +364,13 @@
                                 </div>
                             </div>
                             <div class="v-formats">
+                                {% if vacancy.url and "hh.ru" in vacancy.url %}
+                                    <span class="badge badge-alt">Источник: HeadHunter</span>
+                                {% elif vacancy.external_id|slice:":9" == "trudvsem-" %}
+                                    <span class="badge badge-alt">Источник: Работа России</span>
+                                {% elif vacancy.created_by_id %}
+                                    <span class="badge badge-alt">Источник: На сайте</span>
+                                {% endif %}
                                 {% if vacancy.region %}<span class="badge badge-alt">📍 {{ vacancy.region }}</span>{% endif %}
                                 {% if vacancy.experience_name %}<span class="badge badge-alt">Опыт: {{ vacancy.experience_name }}</span>{% endif %}
                                 {% if vacancy.employment_name %}<span class="badge badge-alt">{{ vacancy.employment_name }}</span>{% endif %}
@@ -383,7 +392,13 @@
                                     <span class="muted">Зарплата не указана</span>
                                 {% endif %}
                             </div>
-                            <div class="v-date" title="{{ vacancy.published_at|date:'d.m.Y H:i' }}">{{ vacancy.published_at|ru_timesince }}</div>
+                            {% if vacancy.external_id|slice:":9" == "trudvsem-" %}
+                                <div class="v-date" title="Обновлено: {{ vacancy.updated_at|date:'d.m.Y H:i' }}">
+                                    Обновлено {{ vacancy.updated_at|ru_timesince }}
+                                </div>
+                            {% else %}
+                                <div class="v-date" title="{{ vacancy.published_at|date:'d.m.Y H:i' }}">{{ vacancy.published_at|ru_timesince }}</div>
+                            {% endif %}
                             <a class="btn-primary" href="{{ vacancy.url }}" target="_blank" rel="noopener">Откликнуться</a>
                         </div>
                         <!-- placeholder shown after animation -->
@@ -419,7 +434,7 @@
                             {% endif %}
                             <div class="placeholder-rating">
                                 <strong>Рейтинг:</strong>
-                                <span class="emp-rating-ph" data-hh-id="{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id }}{% elif vacancy.raw_json.employer.id %}{{ vacancy.raw_json.employer.id }}{% endif %}">⏳</span>
+                                <span class="emp-rating-ph" data-hh-id="{% if vacancy.url and 'hh.ru' in vacancy.url %}{% if vacancy.employer and vacancy.employer.hh_id %}{{ vacancy.employer.hh_id }}{% elif vacancy.raw_json.employer.id %}{{ vacancy.raw_json.employer.id }}{% endif %}{% endif %}">⏳</span>
                             </div>
                         </div>
                     </article>
@@ -689,20 +704,22 @@
         var saveConfirmBtn   = document.getElementById('preset-modal-save');
         var form     = document.getElementById('filter-form');
 
-        if (!select || !form) return;
+        if (!form) return;
 
-        select.addEventListener('change', function(){
-            var hasVal = !!select.value;
-            applyBtn.disabled  = !hasVal;
-            deleteBtn.disabled = !hasVal;
-        });
+        if (select && applyBtn && deleteBtn) {
+            select.addEventListener('change', function(){
+                var hasVal = !!select.value;
+                applyBtn.disabled  = !hasVal;
+                deleteBtn.disabled = !hasVal;
+            });
 
-        applyBtn.addEventListener('click', function(){
-            var pid = parseInt(select.value, 10);
-            var preset = presetsMap[pid];
-            if (!preset) return;
-            applyFilters(preset.filters);
-        });
+            applyBtn.addEventListener('click', function(){
+                var pid = parseInt(select.value, 10);
+                var preset = presetsMap[pid];
+                if (!preset) return;
+                applyFilters(preset.filters);
+            });
+        }
 
         function applyFilters(filters) {
             form.querySelectorAll('input[type=text], input[type=number]').forEach(function(el){
@@ -735,7 +752,7 @@
             form.submit();
         }
 
-        deleteBtn.addEventListener('click', function(){
+        if (deleteBtn && select) deleteBtn.addEventListener('click', function(){
             var pid = parseInt(select.value, 10);
             var preset = presetsMap[pid];
             if (!preset) return;

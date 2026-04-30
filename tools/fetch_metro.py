@@ -27,7 +27,11 @@ import json
 import time
 from urllib.request import Request, urlopen
 
-HEADERS = {'User-Agent': 'job-aggregator-diploma/1.0'}
+HEADERS = {
+    'User-Agent': 'job-aggregator-diploma/1.0 (+http://localhost:8000)',
+    'Accept': 'application/json',
+    'Accept-Language': 'ru-RU,ru;q=0.9',
+}
 BASE    = 'https://api.hh.ru'
 
 

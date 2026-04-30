@@ -287,7 +287,6 @@ class Command(BaseCommand):
             employer.name = name
             employer.logo_url = logo
             employer.hh_rating = random.choice([3.9, 4.2, 4.5, 4.7])
-            employer.dreamjob_rating = random.choice([3.8, 4.1, 4.3, 4.6])
             employer.raw = {"logo_urls": {"original": logo}}
             employer.save()
             employers.append(employer)
@@ -296,13 +295,13 @@ class Command(BaseCommand):
     def _create_vacancies(self, managers, employers, now):
         vacancies = []
 
-        # HH-like vacancies
+        # External vacancies
         for i in range(1, 16):
             employer = employers[(i - 1) % len(employers)]
             external_id = f"demo_hh_{i:03d}"
             vacancy, _ = Vacancy.objects.get_or_create(
                 external_id=external_id,
-                defaults={"title": f"HH Вакансия {i}", "country": "Россия", "published_at": now},
+                defaults={"title": f"Внешняя вакансия {i}", "country": "Россия", "published_at": now},
             )
             vacancy.title = random.choice(
                 [
@@ -336,7 +335,7 @@ class Command(BaseCommand):
             vacancy.accept_temporary = i % 4 == 0
             vacancy.accept_incomplete_resumes = i % 3 == 0
             vacancy.accept_kids = i % 7 == 0
-            vacancy.url = f"https://hh.ru/vacancy/{900000 + i}"
+            vacancy.url = f"https://trudvsem.ru/vacancy/{900000 + i}"
             vacancy.published_at = now - timedelta(days=i)
             vacancy.raw_json = {"source": "hh", "employer": {"logo_urls": {"original": employer.logo_url}}}
             vacancy.description = "Подробное описание вакансии с обязанностями, требованиями и условиями."

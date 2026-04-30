@@ -15,6 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from vacancies.hh_client import hh_openapi_headers
 
 from vacancies.models import (
 	HhDictionaryItem, Vacancy, Employer, VacancyReport, VacancyModerationState,
@@ -245,8 +246,12 @@ class VacancyListView(ListView):
 			queryset = queryset.exclude(contact_phone="")
 		if source == "hh":
 			queryset = queryset.filter(url__icontains="hh.ru")
+		elif source == "trudvsem":
+			queryset = queryset.filter(external_id__startswith='trudvsem-')
+		elif source == "external":
+			queryset = queryset.filter(created_by__isnull=True)
 		elif source == "local":
-			queryset = queryset.exclude(url__icontains="hh.ru")
+			queryset = queryset.filter(created_by__isnull=False)
 		if details_query:
 			queryset = queryset.filter(
 				Q(requirements_text__icontains=details_query)
@@ -671,9 +676,62 @@ class VacancyDetailView(DetailView):
 						return str(st.get('lat', '')), str(st.get('lng', ''))
 		return '', ''
 
+	@staticmethod
+	def _is_hh_source(vacancy):
+		return bool(vacancy and vacancy.url and 'hh.ru' in vacancy.url)
+
+	@staticmethod
+	def _is_trudvsem_source(vacancy):
+		if not vacancy:
+			return False
+		raw = vacancy.raw_json if isinstance(vacancy.raw_json, dict) else {}
+		return str(vacancy.external_id or '').startswith('trudvsem-') or raw.get('source') == 'trudvsem'
+
+	@staticmethod
+	def _trudvsem_address(raw_json):
+		addresses = (raw_json or {}).get('addresses') if isinstance(raw_json, dict) else None
+		if not isinstance(addresses, dict):
+			return '', None, None
+		addr_list = addresses.get('address')
+		if not isinstance(addr_list, list) or not addr_list:
+			return '', None, None
+		first = addr_list[0] if isinstance(addr_list[0], dict) else {}
+		location = str(first.get('location') or '').strip()
+		try:
+			lat = float(first.get('lat')) if first.get('lat') else None
+			lon = float(first.get('lng')) if first.get('lng') else None
+		except Exception:
+			lat, lon = None, None
+		return location, lat, lon
+
+	@staticmethod
+	def _trudvsem_description_html(raw_json):
+		if not isinstance(raw_json, dict):
+			return ''
+		parts = []
+		for title, key in (
+			('Должностные обязанности', 'duty'),
+			('Требования', 'requirement'),
+			('Дополнительные требования', 'requirements'),
+		):
+			value = str(raw_json.get(key) or '').strip()
+			if value:
+				parts.append(
+					f"<section class='tv-block'><h3>{title}</h3><p>{value}</p></section>"
+				)
+		return "<div class='tv-desc'>" + ''.join(parts) + "</div>" if parts else ''
+
 	def get_context_data(self, **kwargs):
 		ctx = super().get_context_data(**kwargs)
 		vac = self.object
+		raw_json = vac.raw_json if isinstance(vac.raw_json, dict) else {}
+		is_hh_source = self._is_hh_source(vac)
+		is_trudvsem_source = self._is_trudvsem_source(vac)
+		ctx['is_hh_source'] = is_hh_source
+		ctx['is_trudvsem_source'] = is_trudvsem_source
+		ctx['is_external_source'] = bool(vac.created_by_id is None and vac.url)
+		ctx['source_label'] = 'HeadHunter' if is_hh_source else ('Работа России' if is_trudvsem_source else ('На сайте' if vac.created_by_id else 'Внешний источник'))
+		ctx['trudvsem_description_html'] = self._trudvsem_description_html(raw_json) if is_trudvsem_source else ''
 
 		# Pre-compute logo URL once (property can hit DB multiple times)
 		ctx['employer_logo_url'] = vac.employer_logo_url
@@ -682,7 +740,7 @@ class VacancyDetailView(DetailView):
 		# Skip remote fetch for non-HH (site-created) vacancies entirely —
 		# they legitimately have no HH description and would only hang the
 		# request for a 404 round-trip.
-		_is_hh_vac = 'hh.ru' in (vac.url or '')
+		_is_hh_vac = is_hh_source
 		if (not vac.description and not vac.branded_description and _is_hh_vac):
 			hh_id = (vac.raw_json or {}).get('id') or vac.external_id
 			if hh_id:
@@ -690,7 +748,7 @@ class VacancyDetailView(DetailView):
 					import json as _json
 					from urllib.request import Request, urlopen
 					_url = f'https://api.hh.ru/vacancies/{hh_id}'
-					_req = Request(_url, headers={'User-Agent': 'job-aggregator-diploma/1.0'})
+					_req = Request(_url, headers=hh_openapi_headers())
 					with urlopen(_req, timeout=3) as _resp:
 						_data = _json.loads(_resp.read().decode('utf-8'))
 					vac.description = _data.get('description', '') or ''
@@ -799,6 +857,7 @@ class VacancyDetailView(DetailView):
 		lat = lon = None
 		geocode_query = None
 		raw_json = vac.raw_json if isinstance(vac.raw_json, dict) else {}
+		trud_addr, trud_lat, trud_lon = self._trudvsem_address(raw_json) if is_trudvsem_source else ('', None, None)
 
 		# 1) Try to get coordinates directly from raw_json.address
 		addr = raw_json.get('address') or {}
@@ -859,7 +918,9 @@ class VacancyDetailView(DetailView):
 				display_address = ', '.join(out)
 
 		# if still empty, fall back to area+region
-		if not display_address:
+		if is_trudvsem_source and trud_addr:
+			display_address = trud_addr
+		elif not display_address:
 			area = raw_json.get('area')
 			parts = []
 			if isinstance(area, dict) and area.get('name'):
@@ -876,6 +937,10 @@ class VacancyDetailView(DetailView):
 			geocode_query = display_address
 
 		# For site-created vacancies raw_json is empty — fall back to model fields
+		if lat is None and trud_lat is not None:
+			lat = trud_lat
+		if lon is None and trud_lon is not None:
+			lon = trud_lon
 		if not lat and vac.lat:
 			lat = vac.lat
 		if not lon and vac.lon:

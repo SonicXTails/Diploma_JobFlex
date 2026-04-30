@@ -34,6 +34,21 @@ ALLOWED_HOSTS = []
 
 # Base URL used in outgoing notifications (email, Telegram).
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
+HH_API_USER_AGENT = os.environ.get('HH_API_USER_AGENT', f'job-aggregator-diploma/1.0 (+{SITE_URL})')
+HH_API_TOKEN = os.environ.get('HH_API_TOKEN', '').strip()
+HH_API_CLIENT_ID = os.environ.get('HH_API_CLIENT_ID', '').strip()
+HH_API_CLIENT_SECRET = os.environ.get('HH_API_CLIENT_SECRET', '').strip()
+HH_SYNC_INTERVAL_SEC = int(os.environ.get('HH_SYNC_INTERVAL_SEC', '300'))
+HH_FETCH_PAGES = int(os.environ.get('HH_FETCH_PAGES', '5'))
+HH_FETCH_PER_PAGE = int(os.environ.get('HH_FETCH_PER_PAGE', '100'))
+HH_STARTUP_FETCH_PAGES = int(os.environ.get('HH_STARTUP_FETCH_PAGES', '1'))
+HH_STARTUP_FETCH_PER_PAGE = int(os.environ.get('HH_STARTUP_FETCH_PER_PAGE', '10'))
+VACANCY_FETCH_ON_STARTUP = os.environ.get('VACANCY_FETCH_ON_STARTUP', 'false').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+HH_BACKFILL_LIMIT = int(os.environ.get('HH_BACKFILL_LIMIT', '80'))
+HH_STALE_CHECK_INTERVAL_SEC = int(os.environ.get('HH_STALE_CHECK_INTERVAL_SEC', '21600'))
+HH_STALE_CHECK_BATCH = int(os.environ.get('HH_STALE_CHECK_BATCH', '50'))
 
 # ── Media files (user uploads) ───────────────────────────────────────────────
 MEDIA_URL  = '/media/'
@@ -172,6 +187,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # reload trigger
 
@@ -188,6 +204,28 @@ CELERY_WORKER_CONCURRENCY = 4    # 4 threads — good for I/O-bound HTTP fetches
 # User-triggered description fetches use priority=9; backfill uses priority=1.
 CELERY_TASK_QUEUE_MAX_PRIORITY = 10
 CELERY_TASK_DEFAULT_PRIORITY = 5
+
+FALLBACK_TRUDVSEM_ENABLED = os.environ.get('FALLBACK_TRUDVSEM_ENABLED', 'true').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+FALLBACK_TRUDVSEM_LIMIT = int(os.environ.get('FALLBACK_TRUDVSEM_LIMIT', '200'))
+FALLBACK_TRUDVSEM_STARTUP_LIMIT = int(os.environ.get('FALLBACK_TRUDVSEM_STARTUP_LIMIT', '10'))
+FALLBACK_TRUDVSEM_SYNC_INTERVAL_SEC = int(
+    os.environ.get('FALLBACK_TRUDVSEM_SYNC_INTERVAL_SEC', str(HH_SYNC_INTERVAL_SEC))
+)
+FALLBACK_TRUDVSEM_TTL_DAYS = int(os.environ.get('FALLBACK_TRUDVSEM_TTL_DAYS', '5'))
+FALLBACK_TRUDVSEM_STATUS_CHECK_INTERVAL_SEC = int(
+    os.environ.get('FALLBACK_TRUDVSEM_STATUS_CHECK_INTERVAL_SEC', '3600')
+)
+FALLBACK_TRUDVSEM_STATUS_CHECK_BATCH = int(
+    os.environ.get('FALLBACK_TRUDVSEM_STATUS_CHECK_BATCH', '100')
+)
+FALLBACK_TRUDVSEM_RECENT_MINUTES = int(os.environ.get('FALLBACK_TRUDVSEM_RECENT_MINUTES', '5'))
+FALLBACK_TRUDVSEM_MAX_PAGES_PER_RUN = int(os.environ.get('FALLBACK_TRUDVSEM_MAX_PAGES_PER_RUN', '1000'))
+FALLBACK_TRUDVSEM_TEXTS = os.environ.get(
+    'FALLBACK_TRUDVSEM_TEXTS',
+    'продавец,кассир,водитель,бухгалтер,менеджер,администратор,python,аналитик,разработчик',
+)
 
 # 2GIS API key (can be overridden via environment variable)
 DGIS_API_KEY = os.environ.get('DGIS_API_KEY', '0cd687b3-98c4-463e-9f30-cf4bd2dc4c4e')

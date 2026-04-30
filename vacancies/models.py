@@ -1,4 +1,5 @@
 from django.db import models
+from urllib.parse import quote
 
 
 class VacancyQuerySet(models.QuerySet):
@@ -13,7 +14,7 @@ class Vacancy(models.Model):
 		ONSITE = "onsite", "На месте"
 
 	external_id = models.CharField(max_length=64)
-	# `source` field removed — use single HH source for this project
+	# Source is inferred from external_id/raw payload.
 	title = models.CharField(max_length=255)
 	company = models.CharField(max_length=255, blank=True)
 
@@ -35,7 +36,7 @@ class Vacancy(models.Model):
 	salary_currency = models.CharField(max_length=16, blank=True)
 	# Flattened key skills for efficient text search
 	key_skills_text = models.TextField(blank=True)
-	# Full-text description fields fetched from HH detail endpoint.
+	# Full-text description fields from external payload.
 	# Stored separately so the list view never needs to read them.
 	description = models.TextField(blank=True)
 	branded_description = models.TextField(blank=True)
@@ -151,7 +152,21 @@ class Vacancy(models.Model):
 			return logos.get('original') or logos.get('240') or logos.get('90') or None
 		if isinstance(logos, str):
 			return logos
-		return None
+		# Absolute fallback: local inline SVG avatar (no external network dependency).
+		name = (self.company or self.title or "Company").strip() or "Company"
+		letters = "".join([w[:1] for w in name.split()[:2]]).upper() or name[:1].upper()
+		svg = (
+			"<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256' viewBox='0 0 256 256'>"
+			"<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+			"<stop offset='0%' stop-color='#C2692A'/>"
+			"<stop offset='100%' stop-color='#7D3F1C'/>"
+			"</linearGradient></defs>"
+			"<rect width='256' height='256' rx='36' fill='url(#g)'/>"
+			f"<text x='128' y='145' text-anchor='middle' font-family='Inter,Arial,sans-serif' "
+			"font-size='92' font-weight='700' fill='#ffffff'>"
+			f"{letters}</text></svg>"
+		)
+		return "data:image/svg+xml;utf8," + quote(svg, safe=":/#?&=,+-._~!$'()*[]@")
 
 	@property
 	def work_formats_display(self):
@@ -172,8 +187,8 @@ class Vacancy(models.Model):
 
 	@property
 	def is_hh(self):
-		"""True when this vacancy originates from hh.ru (not created on this site)."""
-		return 'hh.ru' in (self.url or '')
+		"""True for any imported external vacancy, not site-created."""
+		return self.created_by_id is None and bool(self.url)
 
 
 class Employer(models.Model):
@@ -181,12 +196,12 @@ class Employer(models.Model):
 	hh_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
 	name = models.CharField(max_length=255)
 	logo_url = models.URLField(blank=True)
-	# rating fields (store HH employer rating when available)
+	# External rating fields (legacy-compatible).
 	hh_rating = models.FloatField(blank=True, null=True)
 	rating_raw = models.CharField(max_length=128, blank=True)
 	rating_updated_at = models.DateTimeField(blank=True, null=True)
 
-	# DreamJob rating fields (scraped or via API)
+	# Additional external rating fields (legacy-compatible).
 	dreamjob_rating = models.FloatField(blank=True, null=True)
 	dreamjob_rating_raw = models.CharField(max_length=128, blank=True)
 	dreamjob_rating_updated_at = models.DateTimeField(blank=True, null=True)
@@ -203,7 +218,7 @@ class Employer(models.Model):
 	@property
 	def employer_logo_url(self):
 		"""Return employer logo using explicit `logo_url` if present,
-		otherwise try to extract from stored `raw` payload (HH format).
+		otherwise try to extract from stored `raw` payload.
 		"""
 		# explicit stored URL has priority
 		if self.logo_url:
@@ -212,7 +227,7 @@ class Employer(models.Model):
 		emp = self.raw if isinstance(self.raw, dict) else None
 		if not isinstance(emp, dict):
 			return None
-		# HH often exposes logos under 'logo_urls' or 'logo'
+		# Some providers expose logos under 'logo_urls' or 'logo'
 		logos = emp.get('logo_urls') or emp.get('logo')
 		if isinstance(logos, dict):
 			return logos.get('original') or logos.get('240') or logos.get('90') or None

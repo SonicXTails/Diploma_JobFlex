@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import signal
+import re
 from pathlib import Path
 
 
@@ -25,6 +26,61 @@ COMMANDS = [
     ("poll_telegram", [PYTHON, "manage.py", "poll_telegram_updates"]),
 ]
 
+ANSI = {
+    "reset": "\033[0m",
+    "dim": "\033[2m",
+    "red": "\033[31m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "blue": "\033[34m",
+    "magenta": "\033[35m",
+    "cyan": "\033[36m",
+}
+
+SERVICE_COLOR = {
+    "django": ANSI["green"],
+    "celery": ANSI["cyan"],
+    "celery-beat": ANSI["blue"],
+    "poll_telegram": ANSI["magenta"],
+}
+
+
+def _decode_escaped_unicode(text: str) -> str:
+    if "\\u" not in text:
+        return text
+    try:
+        return bytes(text, "utf-8").decode("unicode_escape")
+    except Exception:
+        return text
+
+
+def _beautify_line(text: str) -> str:
+    text = _decode_escaped_unicode(text)
+
+    m = re.search(r"fetch_vacancy_description: vacancy (\d+) .*?desc=(\d+) branded=(\d+)", text)
+    if m:
+        vid, desc_len, branded_len = m.groups()
+        return f"Описание HH: id={vid}, desc={desc_len}, branded={branded_len}"
+
+    m = re.search(r"Task vacancies\.tasks\.fetch_vacancy_description\[[^\]]+\] succeeded.*'ok:desc=(\d+),branded=(\d+)'", text)
+    if m:
+        desc_len, branded_len = m.groups()
+        return f"Описание HH: задача выполнена (desc={desc_len}, branded={branded_len})"
+
+    if "Task accounts.tasks.notify_interview_reminders_task" in text and "succeeded" in text:
+        return "Напоминания о собеседованиях: задача выполнена"
+    if "Task accounts.tasks.notify_calendar_note_reminders_task" in text and "succeeded" in text:
+        return "Напоминания календаря: задача выполнена"
+
+    return text
+
+
+def _format_prefix(name: str) -> str:
+    is_err = name.endswith("-ERR")
+    base = name[:-4] if is_err else name
+    color = ANSI["red"] if is_err else SERVICE_COLOR.get(base, ANSI["dim"])
+    return f"{color}[{name}]{ANSI['reset']}"
+
 
 async def stream_output(name, stream, forward):
     while True:
@@ -35,7 +91,8 @@ async def stream_output(name, stream, forward):
             text = line.decode(errors="replace").rstrip()
         except Exception:
             text = str(line)
-        print(f"[{name}] {text}")
+        text = _beautify_line(text)
+        print(f"{_format_prefix(name)} {text}")
         if forward:
             sys.stdout.flush()
 

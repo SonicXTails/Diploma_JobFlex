@@ -3,16 +3,21 @@ import time
 from datetime import timedelta
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+import requests
 
 from celery import shared_task
+from celery.exceptions import Retry
+from celery.exceptions import MaxRetriesExceededError
 from django.core.management import call_command
 from django.db import close_old_connections
+from django.conf import settings as dj_settings
+from django.core.cache import cache
 import logging
+from vacancies.hh_client import hh_openapi_headers
 
 logger = logging.getLogger(__name__)
-
-HH_HEADERS = {'User-Agent': 'job-aggregator-diploma/1.0'}
-
+INGEST_GLOBAL_LOCK_KEY = 'lock:vacancy_ingest_global'
+INGEST_LOCK_TTL_SEC = 20 * 60
 
 def _close_connections():
     """Safely close stale DB connections in worker process."""
@@ -20,6 +25,15 @@ def _close_connections():
         close_old_connections()
     except Exception:
         pass
+
+
+def _run_command(name, **kwargs):
+    payload = {k: v for k, v in kwargs.items() if v is not None and v != ''}
+    call_command(name, **payload)
+
+
+def _acquire_lock(key, timeout=INGEST_LOCK_TTL_SEC):
+    return bool(cache.add(key, 1, timeout=timeout))
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=30)
@@ -30,25 +44,67 @@ def fetch_hh_task(self, pages=5, per_page=100, text='', texts='',
     Ratings are fetched lazily on demand (when user opens a vacancy).
     """
     _close_connections()
+    hh_lock_key = 'lock:fetch_hh_task'
+    if not _acquire_lock(hh_lock_key):
+        return 'skipped:already_running'
+    has_global_lock = False
     try:
-        kwargs = {}
-        if pages:
-            kwargs['pages'] = pages
-        if per_page:
-            kwargs['per_page'] = per_page
-        if text:
-            kwargs['text'] = text
-        if texts:
-            kwargs['texts'] = texts
+        if not _acquire_lock(INGEST_GLOBAL_LOCK_KEY):
+            # Another heavy ingest is writing to SQLite right now.
+            # Retry shortly instead of dropping this cycle.
+            raise self.retry(countdown=20)
+        has_global_lock = True
+        kwargs = {'pages': pages, 'per_page': per_page, 'text': text, 'texts': texts, 'area': area}
         if use_default_texts:
             kwargs['use_default_texts'] = True
-        if area is not None:
-            kwargs['area'] = area
-        call_command('fetch_hh', **kwargs)
+        _run_command('fetch_hh', **kwargs)
+    except Retry:
+        raise
+    except MaxRetriesExceededError:
+        logger.warning('Импорт HH пропущен: очередь занята слишком долго')
+        return 'skipped:ingest_busy_timeout'
     except Exception as exc:
-        logger.exception('fetch_hh_task failed')
+        logger.exception('Ошибка задачи импорта HH')
         raise self.retry(exc=exc)
     finally:
+        if has_global_lock:
+            cache.delete(INGEST_GLOBAL_LOCK_KEY)
+        cache.delete(hh_lock_key)
+        _close_connections()
+    return 'ok'
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+def fetch_trudvsem_task(self, limit=200, offset=None, text=''):
+    _close_connections()
+    lock_key = 'lock:fetch_trudvsem_task'
+    if not _acquire_lock(lock_key, timeout=15 * 60):
+        return 'skipped:already_running'
+    has_global_lock = False
+    try:
+        if not _acquire_lock(INGEST_GLOBAL_LOCK_KEY):
+            # Another heavy ingest is writing to SQLite right now.
+            # Retry shortly instead of dropping this cycle.
+            raise self.retry(countdown=20)
+        has_global_lock = True
+        kwargs = {
+            'limit': max(1, int(limit or 200)),
+            'offset': max(0, int(offset)) if offset is not None else None,
+            'text': text,
+        }
+        _run_command('fetch_trudvsem', **kwargs)
+    except Retry:
+        raise
+    except MaxRetriesExceededError:
+        logger.warning('Импорт Работа России пропущен: очередь занята слишком долго')
+        return 'skipped:ingest_busy_timeout'
+    except Exception as exc:
+        logger.exception('Ошибка задачи импорта Работа России')
+        raise self.retry(exc=exc)
+    finally:
+        if has_global_lock:
+            cache.delete(INGEST_GLOBAL_LOCK_KEY)
+        cache.delete(lock_key)
         _close_connections()
     return 'ok'
 
@@ -67,17 +123,17 @@ def fetch_vacancy_description(self, vacancy_id):
     try:
         vacancy = Vacancy.objects.get(id=vacancy_id)
     except Vacancy.DoesNotExist:
-        logger.warning('fetch_vacancy_description: vacancy %s not found', vacancy_id)
+        logger.warning('Описание HH: вакансия id=%s не найдена', vacancy_id)
         return 'not_found'
 
     hh_id = (vacancy.raw_json or {}).get('id') or vacancy.external_id
     if not hh_id:
-        logger.warning('fetch_vacancy_description: vacancy %s has no HH id', vacancy_id)
+        logger.warning('Описание HH: у вакансии id=%s нет HH id', vacancy_id)
         return 'no_hh_id'
 
     url = f'https://api.hh.ru/vacancies/{hh_id}'
     try:
-        req = Request(url, headers=HH_HEADERS)
+        req = Request(url, headers=hh_openapi_headers())
         with urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode('utf-8'))
     except HTTPError as exc:
@@ -86,10 +142,7 @@ def fetch_vacancy_description(self, vacancy_id):
         if exc.code in (403, 404, 410):
             # Vacancy is archived, restricted, or deleted — no point retrying.
             # Write a sentinel so backfill won't keep picking it up.
-            logger.info(
-                'fetch_vacancy_description: vacancy %s HTTP %s — marking unavailable',
-                vacancy_id, exc.code,
-            )
+            logger.info('Описание HH: вакансия id=%s HTTP %s, помечена недоступной', vacancy_id, exc.code)
             Vacancy.objects.filter(id=vacancy_id).update(
                 description='__unavailable__'
             )
@@ -110,7 +163,7 @@ def fetch_vacancy_description(self, vacancy_id):
     _close_connections()
     desc_len = len(vacancy.description)
     branded_len = len(vacancy.branded_description)
-    logger.info('fetch_vacancy_description: vacancy %s — desc=%d branded=%d',
+    logger.info('Описание HH: вакансия id=%s, desc=%d, branded=%d',
                 vacancy_id, desc_len, branded_len)
     return f'ok:desc={desc_len},branded={branded_len}'
 
@@ -139,7 +192,7 @@ def backfill_descriptions_task(limit=50):
         cache.set(cache_key, 1, timeout=600)  # 10-minute TTL
         fetch_vacancy_description.apply_async(args=[vid], countdown=i * 0.5, priority=1)
         queued += 1
-    logger.info('backfill_descriptions_task: queued %d (skipped %d in-flight)',
+    logger.info('Добор описаний HH: в очереди=%d, пропущено(in-flight)=%d',
                 queued, len(ids) - queued)
     return f'queued:{queued}'
 
@@ -176,10 +229,10 @@ def backup_database_task():
     existing  = sorted(backup_dir.glob('db_backup_*.sqlite3'))
     while len(existing) > max_count:
         existing[0].unlink()
-        logger.info('backup_database_task: deleted oldest backup %s', existing[0].name)
+        logger.info('Бэкап БД: удален старый файл %s', existing[0].name)
         existing = existing[1:]
 
-    logger.info('backup_database_task: created %s (total: %d)', backup_path.name, len(existing))
+    logger.info('Бэкап БД: создан %s (всего файлов: %d)', backup_path.name, len(existing))
     return str(backup_path)
 
 
@@ -300,10 +353,11 @@ def check_hh_vacancy_status_task(batch_size=50):
     _close_connections()
 
     # Stage 1 — TTL deactivation (no API needed)
-    cutoff_ttl = tz.now() - timedelta(days=35)
+    cutoff_ttl = tz.now() - timedelta(days=getattr(dj_settings, 'HH_STALE_TTL_DAYS', 35))
     expired = Vacancy.objects.filter(
         created_by__isnull=True,
         is_active=True,
+    ).exclude(external_id__startswith='trudvsem-').filter(
         published_at__lt=cutoff_ttl,
     ).update(is_active=False)
 
@@ -312,31 +366,82 @@ def check_hh_vacancy_status_task(batch_size=50):
         Vacancy.objects.filter(
             created_by__isnull=True,
             is_active=True,
-        ).order_by('published_at').values_list('id', 'external_id')[:batch_size]
+        ).exclude(external_id__startswith='trudvsem-')
+        .order_by('published_at').values_list('id', 'external_id')[:batch_size]
     )
 
     deactivated = 0
     for vid, ext_id in candidates:
         url = f'https://api.hh.ru/vacancies/{ext_id}'
         try:
-            req = Request(url, headers=HH_HEADERS)
+            req = Request(url, headers=hh_openapi_headers())
             with urlopen(req, timeout=10) as resp:
                 resp.read()  # 200 OK — vacancy is still live
         except HTTPError as exc:
             if exc.code in (404, 410):
                 Vacancy.objects.filter(id=vid).update(is_active=False)
                 deactivated += 1
-                logger.info('check_hh_vacancy_status_task: deactivated %s (HTTP %s)', ext_id, exc.code)
+                logger.info('HH статус: деактивирована %s (HTTP %s)', ext_id, exc.code)
             elif exc.code == 429:
-                logger.warning('check_hh_vacancy_status_task: rate-limited by HH, stopping early')
+                logger.warning('HH статус: лимит запросов, ранняя остановка проверки')
                 break
         except Exception as exc:
-            logger.debug('check_hh_vacancy_status_task: skipping %s — %s', ext_id, exc)
+            logger.debug('HH статус: пропуск %s, причина=%s', ext_id, exc)
         time.sleep(0.3)  # stay within HH rate limits
 
     _close_connections()
     logger.info(
-        'check_hh_vacancy_status_task: ttl_expired=%d api_deactivated=%d',
+        'HH статус: ttl_expired=%d, api_deactivated=%d',
         expired, deactivated,
     )
     return f'ttl_expired:{expired},api_deactivated:{deactivated}'
+
+
+@shared_task(bind=False, ignore_result=False)
+def check_trudvsem_vacancy_status_task(batch_size=100):
+    """Hard-delete Trudvsem vacancies that are stale or gone on source."""
+    from .models import Vacancy
+    from django.utils import timezone as tz
+
+    _close_connections()
+    ttl_days = max(1, int(getattr(dj_settings, 'FALLBACK_TRUDVSEM_TTL_DAYS', 5)))
+    cutoff = tz.now() - timedelta(days=ttl_days)
+
+    # Stage 1: hard-delete stale rows not refreshed for TTL period.
+    stale_deleted, _ = Vacancy.objects.filter(
+        created_by__isnull=True,
+        external_id__startswith='trudvsem-',
+        updated_at__lt=cutoff,
+    ).delete()
+
+    # Stage 2: source availability probe for recent rows.
+    candidates = list(
+        Vacancy.objects.filter(
+            created_by__isnull=True,
+            external_id__startswith='trudvsem-',
+        )
+        .order_by('updated_at')
+        .values_list('id', 'url')[:batch_size]
+    )
+
+    source_deleted = 0
+    for vid, url in candidates:
+        target = (url or '').strip()
+        if not target:
+            continue
+        try:
+            resp = requests.get(target, timeout=10, allow_redirects=True)
+            if resp.status_code == 404:
+                Vacancy.objects.filter(id=vid).delete()
+                source_deleted += 1
+        except requests.RequestException:
+            # Network issues should not delete records.
+            continue
+        time.sleep(0.1)
+
+    _close_connections()
+    logger.info(
+        'Работа России статус: stale_deleted=%d, source_deleted=%d',
+        stale_deleted, source_deleted,
+    )
+    return f'stale_deleted:{stale_deleted},source_deleted:{source_deleted}'
