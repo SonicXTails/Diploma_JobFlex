@@ -1,5 +1,7 @@
-# Blueprint for https://render.com — после создания сервиса заполни в Dashboard переменные
-# DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS, SITE_URL (см. комментарий внизу).
+# Render Blueprint: https://render.com/docs/infrastructure-as-code
+# Если деплой падает на создании БД: на бесплатном плане у аккаунта только одна Free Postgres —
+# удали старую или задай другое имя ресурса в Dashboard.
+
 databases:
   - name: jobflex-db
     databaseName: jobflex
@@ -11,11 +13,13 @@ services:
     name: jobflex
     runtime: python
     plan: free
+    region: frankfurt
+    branch: main
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
     startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.9"
+        value: "3.11"
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_SECRET_KEY
@@ -24,10 +28,9 @@ services:
         fromDatabase:
           name: jobflex-db
           property: connectionString
-      # Подставь свой поддомен onrender.com, например: jobflex-xxxx.onrender.com
       - key: DJANGO_ALLOWED_HOSTS
-        sync: false
+        value: jobflex-chistotin.onrender.com
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        sync: false
+        value: https://jobflex-chistotin.onrender.com
       - key: SITE_URL
-        sync: false
+        value: https://jobflex-chistotin.onrender.com
