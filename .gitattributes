@@ -1,0 +1,3 @@
+# requirements must be UTF-8 for Linux/Render; avoid UTF-16 (breaks pip).
+* text=auto
+requirements.txt text eol=lf

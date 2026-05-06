@@ -29,8 +29,8 @@ services:
           name: jobflex-db
           property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
-        value: jobflex-chistotin.onrender.com
+        value: jobflex-4fh0.onrender.com
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://jobflex-chistotin.onrender.com
+        value: https://jobflex-4fh0.onrender.com
       - key: SITE_URL
-        value: https://jobflex-chistotin.onrender.com
+        value: https://jobflex-4fh0.onrender.com
