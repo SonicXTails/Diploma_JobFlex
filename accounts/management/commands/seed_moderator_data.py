@@ -14,7 +14,6 @@ Creates:
 All objects use get_or_create, so re-running is safe.
 """
 
-import io
 import random
 from datetime import timedelta
 
@@ -25,6 +24,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import CalendarNote, Moderator
+from accounts.seed_media import demo_evidence_png_bytes, repair_moderator_deletion_photo_files
 from vacancies.models import (
     ModeratorDeletionPhoto,
     ModeratorDeletionReport,
@@ -32,17 +32,6 @@ from vacancies.models import (
     VacancyModerationState,
     VacancyReport,
 )
-
-
-def _tiny_png() -> bytes:
-    """Return a minimal valid 2×2 red PNG (no Pillow dependency)."""
-    import base64
-    # pre-encoded 2x2 solid-red PNG
-    b64 = (
-        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVQI12P4z8BQ"
-        "DwADhQGAWjR9awAAAABJRU5ErkJggg=="
-    )
-    return base64.b64decode(b64)
 
 
 class Command(BaseCommand):
@@ -85,6 +74,14 @@ class Command(BaseCommand):
         self._create_moderation_states(moderators=moderators, site_vacancies=site_vacancies, now=now)
         self._create_deletion_reports(moderators=moderators, site_vacancies=site_vacancies, now=now)
         self._create_calendar_notes(moderators=moderators, now=now)
+
+        nfix = repair_moderator_deletion_photo_files()
+        if nfix:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Replaced {nfix} unreadable moderator evidence image(s) with valid placeholders."
+                )
+            )
 
         self.stdout.write(self.style.SUCCESS("Moderator demo data seeded successfully."))
         self.stdout.write(self.style.WARNING(
@@ -235,7 +232,7 @@ class Command(BaseCommand):
         if len(site_vacancies) < 3 or not moderators:
             return
 
-        png = _tiny_png()
+        png = demo_evidence_png_bytes()
 
         # --- Report 1: active (not restored) ---
         vac1 = site_vacancies[-1]     # last site vacancy → soft-deleted

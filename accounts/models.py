@@ -211,7 +211,7 @@ class Moderator(models.Model):
 
 
 class Chat(models.Model):
-    """A direct chat thread between one manager and one applicant."""
+    """Прямой чат между одним менеджером и одним соискателем."""
     manager   = models.ForeignKey(User, on_delete=models.CASCADE, related_name='manager_chats')
     applicant = models.ForeignKey(User, on_delete=models.CASCADE, related_name='applicant_chats')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -249,7 +249,7 @@ class Message(models.Model):
 
     @property
     def file_basename(self):
-        """Return just the filename without upload path prefix."""
+        """Возвращает только имя файла без префикса пути загрузки."""
         if not self.file:
             return ''
         import os

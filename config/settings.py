@@ -25,12 +25,22 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-5anve2ez#=k4xki7oaqx%2cc=%@(rw^i(t)qxsf4_9o@hjze9g'
+_SECRET_DEFAULT = 'django-insecure-5anve2ez#=k4xki7oaqx%2cc=%@(rw^i(t)qxsf4_9o@hjze9g'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', _SECRET_DEFAULT)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = []
+_allowed = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()] if _allowed else []
+
+_csrf_origins = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()] if _csrf_origins else []
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Base URL used in outgoing notifications (email, Telegram).
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
@@ -48,7 +58,21 @@ VACANCY_FETCH_ON_STARTUP = os.environ.get('VACANCY_FETCH_ON_STARTUP', 'false').l
 )
 HH_BACKFILL_LIMIT = int(os.environ.get('HH_BACKFILL_LIMIT', '80'))
 HH_STALE_CHECK_INTERVAL_SEC = int(os.environ.get('HH_STALE_CHECK_INTERVAL_SEC', '21600'))
-HH_STALE_CHECK_BATCH = int(os.environ.get('HH_STALE_CHECK_BATCH', '50'))
+HH_STALE_CHECK_BATCH = int(os.environ.get('HH_STALE_CHECK_BATCH', '200'))
+# Перед физическим удалением: сколько активных HH-вакансий опросить по API (архив / 404).
+HH_RECONCILE_ARCHIVED_BATCH = int(os.environ.get('HH_RECONCILE_ARCHIVED_BATCH', '500'))
+# Hard-delete HH imports that stayed inactive (архив / TTL / 404) long enough — limits DB growth.
+HH_INACTIVE_PURGE_ENABLED = os.environ.get('HH_INACTIVE_PURGE_ENABLED', 'true').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+HH_INACTIVE_PURGE_MIN_AGE_DAYS = int(os.environ.get('HH_INACTIVE_PURGE_MIN_AGE_DAYS', '90'))
+HH_INACTIVE_PURGE_BATCH = int(os.environ.get('HH_INACTIVE_PURGE_BATCH', '2000'))
+# Удаление HH-импортов из БД, которые лежат у нас дольше N дней (по created_at, не по API).
+HH_IMPORT_DB_AGE_PURGE_ENABLED = os.environ.get('HH_IMPORT_DB_AGE_PURGE_ENABLED', 'true').lower() in (
+    '1', 'true', 'yes', 'on',
+)
+HH_IMPORT_DB_AGE_PURGE_DAYS = int(os.environ.get('HH_IMPORT_DB_AGE_PURGE_DAYS', '7'))
+HH_IMPORT_DB_AGE_PURGE_BATCH = int(os.environ.get('HH_IMPORT_DB_AGE_PURGE_BATCH', '5000'))
 
 # ── Media files (user uploads) ───────────────────────────────────────────────
 MEDIA_URL  = '/media/'
@@ -108,6 +132,7 @@ REDOC_SETTINGS = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -140,16 +165,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 30,
-            # init_command убираем — это MySQL-опция, не SQLite
+_DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+if _DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=_DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        ),
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 30,
+            },
         },
     }
-}
 
 
 # Password validation
@@ -187,13 +223,22 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # reload trigger
 
 # Celery configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

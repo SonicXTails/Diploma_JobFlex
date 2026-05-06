@@ -1196,7 +1196,7 @@ def api_profile_update(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_apply(request):
-    """Applicant submits an application for a vacancy."""
+    """Соискатель подает заявку на вакансию."""
     if not hasattr(request.user, 'applicant'):
         return JsonResponse({'error': 'not_applicant'}, status=403)
     data = request.data or {}
@@ -1211,7 +1211,7 @@ def api_apply(request):
         return JsonResponse({'error': 'hh_vacancy'}, status=400)
     if not vacancy.is_active:
         return JsonResponse({'error': 'vacancy_archived'}, status=400)
-    # Block applying to own vacancy (both employer and any user who created it)
+    # Заблокировать подачу заявки на собственную вакансию (как работодателю, так и любому пользователю, который ее создал)
     if vacancy.created_by_id == request.user.pk:
         return JsonResponse({'error': 'own_vacancy'}, status=403)
     app, created = Application.objects.get_or_create(
@@ -3051,11 +3051,19 @@ def admin_moderator_report_pdf(request, report_id):
 
     photos = list(report.photos.all())
     if photos:
+        from PIL import Image as PILImage
         story.append(Paragraph('Фото-доказательства', p_h2))
         row = []
         for idx, ph in enumerate(photos):
             try:
-                img = Image(ph.image.path, width=80*mm, height=55*mm, kind='proportional')
+                path = ph.image.path
+                with PILImage.open(path) as pil_im:
+                    pil_im.load()
+                    pil_im = pil_im.convert('RGB')
+                    buf = BytesIO()
+                    pil_im.save(buf, format='PNG')
+                buf.seek(0)
+                img = Image(buf, width=80*mm, height=55*mm, kind='proportional')
                 row.append(img)
             except Exception:
                 continue
@@ -4798,10 +4806,29 @@ def api_calendar_note_save(request):
     PATCH {id, date?, title?, text?, color?, time?} — update date / content / color / time."""
     from datetime import date as _date, time as _time
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    # DRF @api_view: use parsed body (request.data). Reading request.body after the
+    # stream was consumed can raise RawPostDataException or yield stale/empty bytes.
+    data = request.data
+    if not hasattr(data, 'get'):
         return JsonResponse({'error': 'invalid_json'}, status=400)
+
+    def _clean_str(v):
+        if v is None:
+            return ''
+        if isinstance(v, str):
+            return v.strip()
+        return str(v).strip()
+
+    def _parse_calendar_day(raw):
+        """Accept YYYY-MM-DD or leading YYYY-MM-DD from an ISO datetime string (stricter
+        date.fromisoformat in recent Python rejects full datetimes)."""
+        s = _clean_str(raw)
+        if not s:
+            raise ValueError
+        head = s[:10] if len(s) >= 10 else s
+        if len(head) == 10 and head[4] == '-' and head[7] == '-':
+            return _date.fromisoformat(head)
+        return _date.fromisoformat(s)
 
     def _parse_time(raw):
         raw = (raw or '').strip()
@@ -4877,12 +4904,12 @@ def api_calendar_note_save(request):
 
         update_fields = []
         # Date
-        new_date = (data.get('date') or '').strip()
+        new_date = _clean_str(data.get('date'))
         if new_date:
             try:
-                note.date = _date.fromisoformat(new_date)
+                note.date = _parse_calendar_day(new_date)
                 update_fields.append('date')
-            except (ValueError, AttributeError):
+            except (ValueError, TypeError, AttributeError):
                 return JsonResponse({'error': 'invalid_date'}, status=400)
         # Title
         if 'title' in data:
@@ -4933,16 +4960,16 @@ def api_calendar_note_save(request):
         return JsonResponse({'ok': True})
 
     if request.method == 'POST':
-        raw      = (data.get('date') or '').strip()
-        title    = (data.get('title') or '').strip()
-        text     = (data.get('text') or '').strip()
-        color    = (data.get('color') or '#c2a35a').strip()
-        time_raw = (data.get('time') or '').strip()
+        raw      = _clean_str(data.get('date'))
+        title    = _clean_str(data.get('title'))
+        text     = _clean_str(data.get('text'))
+        color    = _clean_str(data.get('color')) or '#c2a35a'
+        time_raw = _clean_str(data.get('time'))
         if not title and not text:
             return JsonResponse({'error': 'empty_note'}, status=400)
         try:
-            day = _date.fromisoformat(raw)
-        except ValueError:
+            day = _parse_calendar_day(raw)
+        except (ValueError, TypeError, AttributeError):
             return JsonResponse({'error': 'invalid_date'}, status=400)
         note_time, _ = _parse_time(time_raw)
         note = CalendarNote.objects.create(

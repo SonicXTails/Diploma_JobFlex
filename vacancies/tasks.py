@@ -143,8 +143,9 @@ def fetch_vacancy_description(self, vacancy_id):
             # Vacancy is archived, restricted, or deleted — no point retrying.
             # Write a sentinel so backfill won't keep picking it up.
             logger.info('Описание HH: вакансия id=%s HTTP %s, помечена недоступной', vacancy_id, exc.code)
-            Vacancy.objects.filter(id=vacancy_id).update(
-                description='__unavailable__'
+            Vacancy.objects.filter(id=vacancy_id, is_moderator_deleted=False).update(
+                description='__unavailable__',
+                is_active=False,
             )
             return f'skipped:{exc.code}'
         raise self.retry(exc=exc)
@@ -157,8 +158,11 @@ def fetch_vacancy_description(self, vacancy_id):
         s.get('name', '') for s in (data.get('key_skills') or []) if isinstance(s, dict)
     )
     vacancy.raw_json = {**(vacancy.raw_json or {}), **data}
-    vacancy.save(update_fields=['description', 'branded_description',
-                                'key_skills_text', 'raw_json'])
+    _fields = ['description', 'branded_description', 'key_skills_text', 'raw_json']
+    if data.get('archived') and not vacancy.is_moderator_deleted:
+        vacancy.is_active = False
+        _fields.append('is_active')
+    vacancy.save(update_fields=_fields)
 
     _close_connections()
     desc_len = len(vacancy.description)
@@ -345,7 +349,8 @@ def check_hh_vacancy_status_task(batch_size=50):
     1. TTL: instantly deactivate HH vacancies older than 35 days
        (HH max lifetime is 30 days; 5-day buffer for extensions).
     2. API check: for remaining active HH vacancies, request the HH API
-       in small batches and deactivate any that return 404 / 410.
+       in small batches and deactivate any that return 403/404/410 or JSON
+       with archived=true (вакансия в архиве на hh.ru).
     """
     from .models import Vacancy
     from django.utils import timezone as tz
@@ -361,13 +366,21 @@ def check_hh_vacancy_status_task(batch_size=50):
         published_at__lt=cutoff_ttl,
     ).update(is_active=False)
 
-    # Stage 2 — API check for newer HH vacancies (oldest first)
+    from_json = Vacancy.objects.filter(
+        created_by__isnull=True,
+        is_active=True,
+        is_moderator_deleted=False,
+        raw_json__archived=True,
+    ).exclude(external_id__startswith='trudvsem-').update(is_active=False)
+
+    # Stage 2 — API check (newest published first — чаще ещё в каталоге на сайте)
     candidates = list(
         Vacancy.objects.filter(
             created_by__isnull=True,
             is_active=True,
+            is_moderator_deleted=False,
         ).exclude(external_id__startswith='trudvsem-')
-        .order_by('published_at').values_list('id', 'external_id')[:batch_size]
+        .order_by('-published_at').values_list('id', 'external_id')[:batch_size]
     )
 
     deactivated = 0
@@ -376,12 +389,28 @@ def check_hh_vacancy_status_task(batch_size=50):
         try:
             req = Request(url, headers=hh_openapi_headers())
             with urlopen(req, timeout=10) as resp:
-                resp.read()  # 200 OK — vacancy is still live
+                body = resp.read()
+            try:
+                data = json.loads(body.decode('utf-8'))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                logger.debug('HH статус: ответ не JSON %s', ext_id)
+                time.sleep(0.3)
+                continue
+            if data.get('archived'):
+                updated = Vacancy.objects.filter(
+                    id=vid, is_moderator_deleted=False, is_active=True
+                ).update(is_active=False)
+                deactivated += int(updated)
+                if updated:
+                    logger.info('HH статус: архив на HH (archived) %s', ext_id)
         except HTTPError as exc:
-            if exc.code in (404, 410):
-                Vacancy.objects.filter(id=vid).update(is_active=False)
-                deactivated += 1
-                logger.info('HH статус: деактивирована %s (HTTP %s)', ext_id, exc.code)
+            if exc.code in (403, 404, 410):
+                updated = Vacancy.objects.filter(
+                    id=vid, is_moderator_deleted=False, is_active=True
+                ).update(is_active=False)
+                deactivated += int(updated)
+                if updated:
+                    logger.info('HH статус: деактивирована %s (HTTP %s)', ext_id, exc.code)
             elif exc.code == 429:
                 logger.warning('HH статус: лимит запросов, ранняя остановка проверки')
                 break
@@ -391,10 +420,234 @@ def check_hh_vacancy_status_task(batch_size=50):
 
     _close_connections()
     logger.info(
-        'HH статус: ttl_expired=%d, api_deactivated=%d',
-        expired, deactivated,
+        'HH статус: ttl_expired=%d, json_archived=%d, api_deactivated=%d',
+        expired, from_json, deactivated,
     )
-    return f'ttl_expired:{expired},api_deactivated:{deactivated}'
+    return f'ttl_expired:{expired},json_archived:{from_json},api_deactivated:{deactivated}'
+
+
+def reconcile_hh_archived_imports_core(*, api_batch=None, dry_run=False):
+    """Снять с публикации импорты HH, которые на api.hh.ru уже в архиве (или 404).
+
+    1) ``raw_json.archived == true`` — уже приходило из прошлых запросов к API.
+    2) Опрос ``GET /vacancies/{id}`` для активных строк (сначала недавно опубликованные).
+    """
+    from .models import Vacancy
+
+    _close_connections()
+
+    api_batch = int(
+        api_batch if api_batch is not None
+        else getattr(dj_settings, 'HH_RECONCILE_ARCHIVED_BATCH', 500)
+    )
+    api_batch = max(0, min(api_batch, 5000))
+
+    hh_active = dict(
+        created_by__isnull=True,
+        is_moderator_deleted=False,
+        is_active=True,
+    )
+    result = {}
+
+    qs_json = (
+        Vacancy.objects.filter(**hh_active, raw_json__archived=True)
+        .exclude(external_id__startswith='trudvsem-')
+    )
+    n_json = qs_json.count()
+    result['active_with_archived_flag_in_json'] = n_json
+    if dry_run:
+        result['would_deactivate_from_json'] = n_json
+    elif n_json:
+        result['deactivated_from_json'] = qs_json.update(is_active=False)
+
+    if api_batch == 0:
+        _close_connections()
+        return result
+
+    candidates = list(
+        Vacancy.objects.filter(**hh_active)
+        .exclude(external_id__startswith='trudvsem-')
+        .order_by('-published_at')
+        .values_list('id', 'external_id')[:api_batch]
+    )
+    result['api_probe_scheduled'] = len(candidates)
+    if dry_run:
+        _close_connections()
+        return result
+
+    deactivated_api = 0
+    hit_429 = False
+    for vid, ext_id in candidates:
+        if not ext_id:
+            continue
+        url = f'https://api.hh.ru/vacancies/{ext_id}'
+        try:
+            req = Request(url, headers=hh_openapi_headers())
+            with urlopen(req, timeout=10) as resp:
+                body = resp.read()
+            try:
+                data = json.loads(body.decode('utf-8'))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                time.sleep(0.25)
+                continue
+            if data.get('archived'):
+                deactivated_api += Vacancy.objects.filter(
+                    id=vid, is_moderator_deleted=False, is_active=True,
+                ).update(is_active=False)
+        except HTTPError as exc:
+            if exc.code in (403, 404, 410):
+                deactivated_api += Vacancy.objects.filter(
+                    id=vid, is_moderator_deleted=False, is_active=True,
+                ).update(is_active=False)
+            elif exc.code == 429:
+                logger.warning('HH reconcile: rate limit, stopping API probe early')
+                hit_429 = True
+                break
+        except Exception:
+            pass
+        time.sleep(0.25)
+
+    result['deactivated_from_api'] = deactivated_api
+    result['stopped_for_429'] = hit_429
+    logger.info(
+        'HH reconcile archived: json_off=%s api_off=%s probed=%s',
+        result.get('deactivated_from_json', result.get('would_deactivate_from_json', 0)),
+        deactivated_api,
+        len(candidates),
+    )
+    _close_connections()
+    return result
+
+
+def purge_inactive_hh_vacancies_core(
+    *, batch_size=None, dry_run=False, reconcile_batch=None, skip_reconcile=False,
+):
+    """Сверка с HH (архив), затем жёсткое удаление давно неактивных импортов.
+
+    Удаляются только ``is_active=False`` и ``published_at`` старше порога
+    (без проверки ``updated_at`` — иначе строки после импорта не попадали в выборку).
+    """
+    from django.utils import timezone as tz
+
+    from .models import Vacancy
+
+    _close_connections()
+    merged = {}
+    if not skip_reconcile:
+        merged['reconcile'] = reconcile_hh_archived_imports_core(
+            api_batch=reconcile_batch,
+            dry_run=dry_run,
+        )
+
+    if not getattr(dj_settings, 'HH_INACTIVE_PURGE_ENABLED', True):
+        merged['skipped_purge'] = 'disabled'
+        return merged
+
+    days = max(7, int(getattr(dj_settings, 'HH_INACTIVE_PURGE_MIN_AGE_DAYS', 90)))
+    batch = batch_size if batch_size is not None else int(
+        getattr(dj_settings, 'HH_INACTIVE_PURGE_BATCH', 2000)
+    )
+    batch = max(1, min(int(batch), 10000))
+
+    cutoff = tz.now() - timedelta(days=days)
+    base_qs = (
+        Vacancy.objects.filter(
+            created_by__isnull=True,
+            is_active=False,
+            is_moderator_deleted=False,
+            published_at__lt=cutoff,
+        )
+        .exclude(external_id__startswith='trudvsem-')
+        .order_by('published_at')
+    )
+    ids = list(base_qs.values_list('id', flat=True)[:batch])
+    if dry_run:
+        merged['dry_run'] = True
+        merged['would_delete'] = len(ids)
+        merged['sample_ids'] = ids[:20]
+        return merged
+    if not ids:
+        merged['deleted_total'] = 0
+        merged['vacancy_ids_requested'] = 0
+        return merged
+
+    deleted_total, details = Vacancy.objects.filter(pk__in=ids).delete()
+    logger.info(
+        'HH purge inactive: vacancies_requested=%s ORM_deleted_total=%s per_model=%s',
+        len(ids), deleted_total, details,
+    )
+    _close_connections()
+    merged['deleted_total'] = deleted_total
+    merged['vacancy_ids_requested'] = len(ids)
+    merged['per_model'] = details
+    return merged
+
+
+def purge_hh_imports_by_db_age_core(*, days=None, batch_size=None, dry_run=False):
+    """Жёстко удалить HH-импорты, у которых ``created_at`` старше порога (дней в нашей БД).
+
+    Не трогает вакансии с сайта (``created_by`` задан) и строки ``trudvsem-*``.
+    """
+    from django.utils import timezone as tz
+
+    from .models import Vacancy
+
+    _close_connections()
+    out = {}
+    if not getattr(dj_settings, 'HH_IMPORT_DB_AGE_PURGE_ENABLED', True):
+        out['skipped'] = 'disabled'
+        return out
+
+    eff_days = days if days is not None else int(
+        getattr(dj_settings, 'HH_IMPORT_DB_AGE_PURGE_DAYS', 7)
+    )
+    eff_days = max(1, int(eff_days))
+    batch = batch_size if batch_size is not None else int(
+        getattr(dj_settings, 'HH_IMPORT_DB_AGE_PURGE_BATCH', 5000)
+    )
+    batch = max(1, min(int(batch), 50000))
+
+    cutoff = tz.now() - timedelta(days=eff_days)
+    base_qs = (
+        Vacancy.objects.filter(created_by__isnull=True, created_at__lt=cutoff)
+        .exclude(external_id__startswith='trudvsem-')
+        .order_by('created_at')
+    )
+    ids = list(base_qs.values_list('id', flat=True)[:batch])
+    out['cutoff_iso'] = cutoff.isoformat()
+    out['days'] = eff_days
+    if dry_run:
+        out['dry_run'] = True
+        out['would_delete'] = len(ids)
+        out['sample_ids'] = ids[:20]
+        return out
+    if not ids:
+        out['deleted_total'] = 0
+        out['vacancy_ids_requested'] = 0
+        return out
+
+    deleted_total, details = Vacancy.objects.filter(pk__in=ids).delete()
+    logger.info(
+        'HH purge by DB age: vacancies_requested=%s ORM_deleted_total=%s per_model=%s',
+        len(ids), deleted_total, details,
+    )
+    _close_connections()
+    out['deleted_total'] = deleted_total
+    out['vacancy_ids_requested'] = len(ids)
+    out['per_model'] = details
+    return out
+
+
+@shared_task(bind=False, ignore_result=False)
+def purge_inactive_hh_vacancies_task():
+    """Scheduled: reconcile HH archived state, then hard-delete old inactive imports."""
+    return purge_inactive_hh_vacancies_core()
+
+
+@shared_task(bind=False, ignore_result=False)
+def purge_hh_imports_by_db_age_task():
+    """Scheduled: hard-delete HH imports older than HH_IMPORT_DB_AGE_PURGE_DAYS in our DB."""
+    return purge_hh_imports_by_db_age_core()
 
 
 @shared_task(bind=False, ignore_result=False)

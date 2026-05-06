@@ -656,6 +656,7 @@ class VacancyDetailView(DetailView):
 		)
 		if not is_priv:
 			qs = qs.exclude(is_moderator_deleted=True)
+			qs = qs.filter(is_active=True)
 		return get_object_or_404(qs, external_id=external_id)
 
 	@staticmethod

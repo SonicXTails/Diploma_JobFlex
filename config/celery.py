@@ -78,6 +78,16 @@ app.conf.beat_schedule = {
         'schedule': getattr(django_settings, 'HH_STALE_CHECK_INTERVAL_SEC', 21600),
         'kwargs': {'batch_size': getattr(django_settings, 'HH_STALE_CHECK_BATCH', 50)},
     },
+    # Удаление из БД давно неактивных HH-вакансий (не сайт, не Работа России).
+    'purge-inactive-hh-vacancies': {
+        'task': 'vacancies.tasks.purge_inactive_hh_vacancies_task',
+        'schedule': crontab(hour=4, minute=15),
+    },
+    # Удаление HH-импортов старше N дней с момента insert в нашу БД (created_at).
+    'purge-hh-imports-by-db-age': {
+        'task': 'vacancies.tasks.purge_hh_imports_by_db_age_task',
+        'schedule': crontab(hour=5, minute=0),
+    },
     'check-trudvsem-vacancy-status': {
         'task': 'vacancies.tasks.check_trudvsem_vacancy_status_task',
         'schedule': getattr(django_settings, 'FALLBACK_TRUDVSEM_STATUS_CHECK_INTERVAL_SEC', 3600),

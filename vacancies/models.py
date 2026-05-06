@@ -14,11 +14,11 @@ class Vacancy(models.Model):
 		ONSITE = "onsite", "На месте"
 
 	external_id = models.CharField(max_length=64)
-	# Source is inferred from external_id/raw payload.
+	# Источник выводится из "полезной" нагрузки external_id/raw.
 	title = models.CharField(max_length=255)
 	company = models.CharField(max_length=255, blank=True)
 
-	# normalized employer relation (nullable for legacy rows)
+	# нормализованное отношение с работодателем (может быть обнулено для устаревших строк)
 	employer = models.ForeignKey(
 				'Employer',
 				null=True,
@@ -67,7 +67,7 @@ class Vacancy(models.Model):
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
-	# Site-created vacancies (employer fills the form on this site)
+	# Вакансии, созданные на сайте (работодатель заполняет форму на этом сайте)
 	created_by = models.ForeignKey(
 		'auth.User',
 		null=True, blank=True,
@@ -75,8 +75,8 @@ class Vacancy(models.Model):
 		related_name='created_vacancies',
 	)
 	is_active = models.BooleanField(default=True, db_index=True)
-	# Soft-deletion by a moderator: the vacancy is hidden from everyone, but can
-	# be restored by an administrator via the moderator reports panel.
+	# Софт-удаление модератором: вакансия скрыта от всех, но
+	# быть восстановлено администратором через модератора панели отчета.
 	is_moderator_deleted = models.BooleanField(default=False, db_index=True)
 
 	# Extended employer-form fields

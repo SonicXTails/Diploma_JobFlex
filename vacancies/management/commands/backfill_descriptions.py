@@ -115,8 +115,11 @@ class Command(BaseCommand):
             vacancy.key_skills_text = ", ".join(
                 s.get("name", "") for s in key_skills if isinstance(s, dict)
             )
-            vacancy.save(update_fields=["raw_json", "description",
-                                        "branded_description", "key_skills_text"])
+            upd = ["raw_json", "description", "branded_description", "key_skills_text"]
+            if data.get("archived") and not vacancy.is_moderator_deleted:
+                vacancy.is_active = False
+                upd.append("is_active")
+            vacancy.save(update_fields=upd)
 
             desc_preview = desc[:60].replace("\n", " ") if desc else "(empty)"
             branded_mark = f"  branded={len(branded)}ch" if branded else ""

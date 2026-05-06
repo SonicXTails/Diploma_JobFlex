@@ -1,4 +1,3 @@
-import base64
 import random
 from datetime import timedelta
 
@@ -25,6 +24,7 @@ from accounts.models import (
     UserUiPreference,
     WorkExperience,
 )
+from accounts.seed_media import demo_evidence_png_bytes, repair_moderator_deletion_photo_files
 from vacancies.models import (
     Bookmark,
     Employer,
@@ -72,6 +72,14 @@ class Command(BaseCommand):
         self._create_calendar_notes(users=[*managers, *applicants, *moderators], now=now)
         self._create_filter_presets(applicants=applicants)
         self._create_ui_preferences(users=[*managers, *applicants, *moderators])
+
+        nfix = repair_moderator_deletion_photo_files()
+        if nfix:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Replaced {nfix} unreadable moderator evidence image(s) with valid placeholders."
+                )
+            )
 
         self.stdout.write(self.style.SUCCESS("Demo data successfully seeded."))
         self.stdout.write(
@@ -691,9 +699,7 @@ class Command(BaseCommand):
             return
 
         admin_user = User.objects.filter(is_superuser=True).first()
-        png_bytes = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVQI12P4z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
-        )
+        png_bytes = demo_evidence_png_bytes()
 
         # Active deletion report
         vac_active = site_vacancies[-1]

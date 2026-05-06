@@ -202,6 +202,10 @@ class Command(BaseCommand):
                 "accept_incomplete_resumes": bool(item.get("accept_incomplete_resumes")),
                 "accept_kids": bool(item.get("accept_kids")),
             }
+            # Архив на HH (не в поиске / не принимает отклики) — скрываем у нас, как и при TTL/API 404.
+            # Не трогаем is_active для неархивных строк: иначе воскреснут вакансии, отключённые только по TTL.
+            if bool(item.get("archived")):
+                defaults["is_active"] = False
 
             # attach employer instance if we found/created one
             if employer_obj:
