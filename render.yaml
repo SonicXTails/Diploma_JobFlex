@@ -4,15 +4,27 @@
 # - В Blueprint для type:cron нельзя plan: free; любой cron = платный инстанс → нужны данные карты.
 # - Manual sync без карты возможен только если в файле нет платных сервисов.
 #
-# Импорт вакансий без оплаты Render Cron:
-# 1) Dashboard → твой Web → Shell:
-#    python manage.py render_prod_smoke
-#    (или отдельно fetch_hh + enforce_hh_import_cap, как в «рецепте» ниже)
-#    Команды на своём ПК пишут в локальную БД — сайт на Render обновляет только запуск в Shell web на Render.
-# 2) Опционально: python manage.py sync_hh_dictionaries — справочники HH для фильтров (опыт, график…);
-#    города в фильтре «регион» строятся из поля region у вакансий после импорта/добора описаний.
-# 3) Либо внешний бесплатный scheduler (например GitHub Actions по cron) с секретом DATABASE_URL —
-#    клонирование репо, pip install -r requirements.txt, manage.py …
+# Импорт вакансий без оплаты Render Shell / Cron:
+#
+# A) Со своего ПК в продовую БД Render (Shell не нужен):
+#    В Render: Postgres → Connect → скопировать External Database URL.
+#    Web → Environment → скопировать значение DJANGO_SECRET_KEY.
+#    PowerShell (пример):
+#      $env:DATABASE_URL = '<вставить External Database URL>'
+#      $env:DJANGO_SECRET_KEY = '<секрет web>'
+#      $env:DEPLOY_ENV = 'production'; $env:DJANGO_DEBUG = 'false'; $env:HH_IMPORT_TOTAL_CAP = '1000'
+#      python manage.py render_prod_smoke
+#
+# B) GitHub Actions (бесплатно): репозиторий → Settings → Secrets and variables → Actions:
+#      RENDER_DATABASE_URL = External Database URL (Postgres на Render)
+#      RENDER_DJANGO_SECRET_KEY = тот же DJANGO_SECRET_KEY, что у web на Render
+#    Файл: .github/workflows/render-hh-import.yml → вкладка Actions → «Render HH import» → Run workflow;
+#    либо по расписанию каждый день 07:00 UTC.
+#
+# C) Опционально на сервере: python manage.py sync_hh_dictionaries — справочники фильтров HH;
+#    города в фильтре «регион» — из поля region вакансий (см. импорт / backfill_descriptions).
+#
+# D) Render Shell (если доступен в твоём плане): та же команда render_prod_smoke в Shell web.
 #
 # Если позже привяжешь карту — создай Cron Job вручную в Dashboard (New → Cron Job) или
 # верни блоки services ниже в YAML как отдельный коммит и синкни Blueprint.

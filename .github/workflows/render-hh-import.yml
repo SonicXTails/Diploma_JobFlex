@@ -1,0 +1,43 @@
+# Бесплатная альтернатива Render Shell / платному Cron: импорт HH в Postgres на Render.
+#
+# Настройка (один раз в репозитории GitHub → Settings → Secrets → Actions):
+#   RENDER_DATABASE_URL — из Render: Postgres → Connect → External Database URL
+#   RENDER_DJANGO_SECRET_KEY — значение DJANGO_SECRET_KEY сервиса web на Render
+#     (Environment → показать secret; без этого Django не стартует)
+#
+# Запуск: Actions → "Render HH import" → Run workflow; либо по расписанию (cron UTC).
+
+name: Render HH import
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * *"
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.RENDER_DJANGO_SECRET_KEY }}
+      DEPLOY_ENV: production
+      DJANGO_DEBUG: "false"
+      HH_IMPORT_TOTAL_CAP: "1000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        run: |
+          test -n "${DATABASE_URL:-}" || (echo "::error::Add GitHub Actions secret RENDER_DATABASE_URL (Render → Postgres → External Database URL)" && exit 1)
+          test -n "${DJANGO_SECRET_KEY:-}" || (echo "::error::Add GitHub Actions secret RENDER_DJANGO_SECRET_KEY (same value as DJANGO_SECRET_KEY on Render web)" && exit 1)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch HH + enforce cap
+        run: python manage.py render_prod_smoke

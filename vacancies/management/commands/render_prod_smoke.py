@@ -1,7 +1,7 @@
-"""Та же последовательность, что у Cron на Render: импорт HH + enforce cap.
+"""Та же последовательность, что у продовой схемы: импорт HH + enforce cap.
 
-Запуск в Render Shell (web): ``python manage.py render_prod_smoke``
-(параметры по умолчанию совпадают с jobflex-hh-import в render.yaml).
+Запуск из CI или с ПК при подставленном ``DATABASE_URL`` базы Render — см. render.yaml
+и ``.github/workflows/render-hh-import.yml``.
 """
 
 import os
@@ -36,11 +36,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        if not os.environ.get('RENDER'):
+        if not os.environ.get('RENDER') and not os.environ.get('GITHUB_ACTIONS'):
             self.stdout.write(self.style.WARNING(
-                'Подсказка: открытый сайт на Render читает БД Render. '
-                'Обновление прода — запуск этой команды в Shell сервиса web на Render, '
-                'не на своём ПК.'
+                'Подсказка: сайт на Render использует БД из панели Render, не локальную SQLite/Postgres. '
+                'Без Shell: задай DATABASE_URL (External Database URL) и DJANGO_SECRET_KEY с сервиса web '
+                'и снова запусти эту команду; либо включи workflow «Render HH import» на GitHub.'
             ))
         pages = max(1, int(opts['pages']))
         per_page = min(max(1, int(opts['per_page'])), 100)
