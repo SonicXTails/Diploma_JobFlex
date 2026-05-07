@@ -14,6 +14,7 @@ from django.conf import settings as dj_settings
 from django.core.cache import cache
 import logging
 from vacancies.hh_client import hh_openapi_headers
+from vacancies.hh_location import extract_country_region_from_hh_item
 
 logger = logging.getLogger(__name__)
 INGEST_GLOBAL_LOCK_KEY = 'lock:vacancy_ingest_global'
@@ -158,7 +159,11 @@ def fetch_vacancy_description(self, vacancy_id):
         s.get('name', '') for s in (data.get('key_skills') or []) if isinstance(s, dict)
     )
     vacancy.raw_json = {**(vacancy.raw_json or {}), **data}
-    _fields = ['description', 'branded_description', 'key_skills_text', 'raw_json']
+    country, region = extract_country_region_from_hh_item(vacancy.raw_json or {})
+    if country != vacancy.country or region != vacancy.region:
+        vacancy.country = country
+        vacancy.region = region
+    _fields = ['description', 'branded_description', 'key_skills_text', 'raw_json', 'country', 'region']
     if data.get('archived') and not vacancy.is_moderator_deleted:
         vacancy.is_active = False
         _fields.append('is_active')
@@ -630,6 +635,50 @@ def purge_hh_imports_by_db_age_core(*, days=None, batch_size=None, dry_run=False
     logger.info(
         'HH purge by DB age: vacancies_requested=%s ORM_deleted_total=%s per_model=%s',
         len(ids), deleted_total, details,
+    )
+    _close_connections()
+    out['deleted_total'] = deleted_total
+    out['vacancy_ids_requested'] = len(ids)
+    out['per_model'] = details
+    return out
+
+
+def enforce_hh_import_cap_core(*, cap=None, dry_run=False):
+    """Удалить самые старые по ``created_at`` импорты, пока их число не станет ≤ cap.
+
+    Учитываются только строки с ``created_by is null`` (HH, trudvsem и др. импорты);
+    вакансии с сайта не трогаем. При ``HH_IMPORT_TOTAL_CAP <= 0`` — no-op.
+    """
+    from .models import Vacancy
+
+    _close_connections()
+    eff_cap = cap if cap is not None else int(getattr(dj_settings, 'HH_IMPORT_TOTAL_CAP', 0))
+    eff_cap = int(eff_cap)
+    out = {'cap': eff_cap}
+    if eff_cap <= 0:
+        out['skipped'] = 'disabled'
+        return out
+
+    qs = Vacancy.objects.filter(created_by__isnull=True).order_by('created_at')
+    total = qs.count()
+    out['before'] = total
+    if total <= eff_cap:
+        out['deleted_total'] = 0
+        out['vacancy_ids_requested'] = 0
+        return out
+
+    excess = total - eff_cap
+    ids = list(qs.values_list('id', flat=True)[:excess])
+    if dry_run:
+        out['dry_run'] = True
+        out['would_delete'] = len(ids)
+        out['sample_ids'] = ids[:20]
+        return out
+
+    deleted_total, details = Vacancy.objects.filter(pk__in=ids).delete()
+    logger.info(
+        'HH import cap: before=%s cap=%s deleted_orm_total=%s per_model=%s',
+        total, eff_cap, deleted_total, details,
     )
     _close_connections()
     out['deleted_total'] = deleted_total

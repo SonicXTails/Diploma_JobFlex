@@ -4,6 +4,8 @@
 (параметры по умолчанию совпадают с jobflex-hh-import в render.yaml).
 """
 
+import os
+
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
@@ -34,6 +36,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
+        if not os.environ.get('RENDER'):
+            self.stdout.write(self.style.WARNING(
+                'Подсказка: открытый сайт на Render читает БД Render. '
+                'Обновление прода — запуск этой команды в Shell сервиса web на Render, '
+                'не на своём ПК.'
+            ))
         pages = max(1, int(opts['pages']))
         per_page = min(max(1, int(opts['per_page'])), 100)
         self.stdout.write(f'--- fetch_hh --pages {pages} --per-page {per_page} ---')

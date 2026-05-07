@@ -16,6 +16,7 @@ from django.core.management.base import BaseCommand
 
 from vacancies.models import Vacancy
 from vacancies.hh_client import hh_openapi_headers
+from vacancies.hh_location import extract_country_region_from_hh_item
 
 
 class Command(BaseCommand):
@@ -110,12 +111,16 @@ class Command(BaseCommand):
             # Merge detail data into raw_json (detail is a superset of list item)
             merged = {**(vacancy.raw_json or {}), **data}
             vacancy.raw_json = merged
+            country, region = extract_country_region_from_hh_item(merged)
+            if country != vacancy.country or region != vacancy.region:
+                vacancy.country = country
+                vacancy.region = region
             vacancy.description = desc
             vacancy.branded_description = branded
             vacancy.key_skills_text = ", ".join(
                 s.get("name", "") for s in key_skills if isinstance(s, dict)
             )
-            upd = ["raw_json", "description", "branded_description", "key_skills_text"]
+            upd = ["raw_json", "description", "branded_description", "key_skills_text", "country", "region"]
             if data.get("archived") and not vacancy.is_moderator_deleted:
                 vacancy.is_active = False
                 upd.append("is_active")

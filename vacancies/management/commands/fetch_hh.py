@@ -6,11 +6,13 @@ from urllib.request import Request, urlopen
 
 from django.core.management.base import BaseCommand
 from django.core.cache import cache
+from django.conf import settings as dj_settings
 from django.db import transaction
 from django.utils import timezone
 
 from vacancies.models import Vacancy, Employer
 from vacancies.hh_client import hh_openapi_headers
+from vacancies.hh_location import extract_country_region_from_hh_item
 
 
 
@@ -48,6 +50,18 @@ class Command(BaseCommand):
         parser.add_argument("--per-page", type=int, default=100, help="Items per page (max 100)")
         parser.add_argument("--area", type=int, default=None, help="HH area id (optional)")
 
+    def _hh_import_count(self):
+        return Vacancy.objects.filter(created_by__isnull=True).exclude(
+            external_id__startswith='trudvsem-',
+        ).count()
+
+    def _effective_hh_import_cap(self):
+        """Лимит строк HH (без trudvsem) при импорте: IMPORT_CAP_VACANCIES_HH или HH_IMPORT_TOTAL_CAP."""
+        explicit = max(0, int(getattr(dj_settings, 'IMPORT_CAP_VACANCIES_HH', 0) or 0))
+        if explicit:
+            return explicit
+        return max(0, int(getattr(dj_settings, 'HH_IMPORT_TOTAL_CAP', 0) or 0))
+
     def handle(self, *args, **options):
         text = (options["text"] or "").strip()
         texts = (options["texts"] or "").strip()
@@ -56,6 +70,13 @@ class Command(BaseCommand):
         per_page = min(max(1, options["per_page"]), 100)
         area = options["area"]
 
+        cap = self._effective_hh_import_cap()
+        if cap and self._hh_import_count() >= cap:
+            self.stdout.write(self.style.WARNING(
+                self._console_safe(f'Импорт HH: уже есть {cap} записей из HH (лимит), пропуск.'),
+            ))
+            return
+
         query_list = self._build_query_list(text, texts, use_default_texts)
         incremental_mode = (not text and not texts and not use_default_texts and area is None)
         since_dt = self._read_cursor() if incremental_mode else None
@@ -63,6 +84,7 @@ class Command(BaseCommand):
         created_total = 0
         updated_total = 0
         newest_seen = since_dt
+        hit_cap = False
 
         for query in query_list:
             query_title = query or "<all>"
@@ -75,13 +97,18 @@ class Command(BaseCommand):
             if incremental_mode and not self._has_new_ids(first_items):
                 self.stdout.write(self._console_safe("  Page 1: no new ids, stop incremental scan"))
                 continue
-            created_count, updated_count = self._save_items(first_items)
-            newest_seen = self._max_dt(newest_seen, self._max_published(first_items))
+            created_count, updated_count, hit_cap = self._save_items(first_items)
             created_total += created_count
             updated_total += updated_count
+            newest_seen = self._max_dt(newest_seen, self._max_published(first_items))
             self.stdout.write(self._console_safe(
                 f"  Page 1/{total_pages}: created={created_count}, updated={updated_count}"
             ))
+            if hit_cap:
+                self.stdout.write(self.style.WARNING(
+                    self._console_safe(f'Импорт HH: достигнут лимит {cap} записей.'),
+                ))
+                break
 
             for page in range(1, total_pages):
                 payload = self._fetch_page(query, area, per_page, page, since_dt=since_dt)
@@ -93,13 +120,21 @@ class Command(BaseCommand):
                 if incremental_mode and not self._has_new_ids(items):
                     break
 
-                created_count, updated_count = self._save_items(items)
+                created_count, updated_count, hit_cap = self._save_items(items)
                 newest_seen = self._max_dt(newest_seen, self._max_published(items))
                 created_total += created_count
                 updated_total += updated_count
                 self.stdout.write(self._console_safe(
                     f"  Page {page + 1}/{total_pages}: created={created_count}, updated={updated_count}"
                 ))
+                if hit_cap:
+                    self.stdout.write(self.style.WARNING(
+                        self._console_safe(f'Импорт HH: достигнут лимит {cap} записей.'),
+                    ))
+                    break
+
+            if hit_cap:
+                break
 
         if incremental_mode and newest_seen:
             self._write_cursor(newest_seen)
@@ -146,9 +181,15 @@ class Command(BaseCommand):
         created_count = 0
         updated_count = 0
 
+        cap = self._effective_hh_import_cap()
+        remaining = None
+        if cap:
+            remaining = max(0, cap - self._hh_import_count())
+            if remaining <= 0:
+                return 0, 0, True
+
         for item in items:
-            area = item.get("area") or {}
-            country, region = self._extract_location(area)
+            country, region = extract_country_region_from_hh_item(item)
             experience = item.get("experience") or {}
             flags = self._work_format_flags(item)
             work_format = self._primary_work_format(flags)
@@ -217,16 +258,14 @@ class Command(BaseCommand):
             )
             created_count += int(created)
             updated_count += int(not created)
+            if cap and created and remaining is not None:
+                remaining -= 1
+                if remaining <= 0:
+                    return created_count, updated_count, True
             # Description fetching is handled by backfill_descriptions_task (Celery beat)
             # which spaces requests at 0.5 s intervals to avoid HH rate-limiting.
 
-        return created_count, updated_count
-
-    def _extract_location(self, area):
-        name = (area or {}).get("name") or ""
-        if name in {"Казахстан", "Беларусь", "Узбекистан", "Грузия", "Армения", "Кыргызстан", "Азербайджан"}:
-            return name, ""
-        return "Россия", name
+        return created_count, updated_count, False
 
     def _work_format_flags(self, item):
         formats = item.get("work_format") or []

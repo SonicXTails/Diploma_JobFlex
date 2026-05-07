@@ -8,7 +8,10 @@
 # 1) Dashboard → твой Web → Shell:
 #    python manage.py render_prod_smoke
 #    (или отдельно fetch_hh + enforce_hh_import_cap, как в «рецепте» ниже)
-# 2) Либо внешний бесплатный scheduler (например GitHub Actions по cron) с секретом DATABASE_URL —
+#    Команды на своём ПК пишут в локальную БД — сайт на Render обновляет только запуск в Shell web на Render.
+# 2) Опционально: python manage.py sync_hh_dictionaries — справочники HH для фильтров (опыт, график…);
+#    города в фильтре «регион» строятся из поля region у вакансий после импорта/добора описаний.
+# 3) Либо внешний бесплатный scheduler (например GitHub Actions по cron) с секретом DATABASE_URL —
 #    клонирование репо, pip install -r requirements.txt, manage.py …
 #
 # Если позже привяжешь карту — создай Cron Job вручную в Dashboard (New → Cron Job) или
