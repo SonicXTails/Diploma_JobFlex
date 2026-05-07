@@ -7,13 +7,12 @@
 # Импорт вакансий без оплаты Render Shell / Cron:
 #
 # A) Со своего ПК в продовую БД Render (Shell не нужен):
-#    В Render: Postgres → Connect → скопировать External Database URL.
-#    Web → Environment → скопировать значение DJANGO_SECRET_KEY.
-#    PowerShell (пример):
-#      $env:DATABASE_URL = '<вставить External Database URL>'
-#      $env:DJANGO_SECRET_KEY = '<секрет web>'
-#      $env:DEPLOY_ENV = 'production'; $env:DJANGO_DEBUG = 'false'; $env:HH_IMPORT_TOTAL_CAP = '1000'
-#      python manage.py render_prod_smoke
+#    Шаблон: скопируй .env.render.example → .env.render (файл в .gitignore), заполни:
+#      DATABASE_URL = External Database URL (Postgres → Connect на Render)
+#      DJANGO_SECRET_KEY = значение с web-сервиса на Render
+#    Запуск:  .\tools\run_render_import.ps1   или   bash tools/run_render_import.sh
+#    (внутри выставляется JOBFLEX_USE_RENDER_DB=1 — см. config/settings.py)
+#    Вручную без файла — прежний вариант с $env:DATABASE_URL / $env:DJANGO_SECRET_KEY в PowerShell.
 #
 # B) GitHub Actions (бесплатно): репозиторий → Settings → Secrets and variables → Actions:
 #      RENDER_DATABASE_URL = External Database URL (Postgres на Render)

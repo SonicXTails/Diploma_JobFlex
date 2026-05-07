@@ -5,3 +5,5 @@ backups/*.sqlite3
 staticfiles/
 celerybeat-schedule
 celerybeat-schedule.*
+# Локальные секреты Render (Postgres URL, DJANGO_SECRET_KEY) — см. .env.render.example
+.env.render

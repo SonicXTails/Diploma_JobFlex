@@ -19,6 +19,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env from project root (if present); silently ignored in production.
 load_dotenv(BASE_DIR / '.env')
+# Секреты прод-БД Render в .env.render (в .gitignore). Подгрузка только при явном флаге —
+# иначе случайный runserver с DATABASE_URL от Render не упрётся в прод.
+if os.environ.get('JOBFLEX_USE_RENDER_DB', '').strip().lower() in ('1', 'true', 'yes', 'on'):
+    load_dotenv(BASE_DIR / '.env.render', override=True)
 
 # Режим деплоя: на Render задать DEPLOY_ENV=production (или prod/render) вместе с env в render.yaml.
 # Тогда ниже подставляются осторожные дефолты только если переменная не задана явно.

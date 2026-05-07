@@ -36,11 +36,18 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        if not os.environ.get('RENDER') and not os.environ.get('GITHUB_ACTIONS'):
+        targeting_render = os.environ.get('JOBFLEX_USE_RENDER_DB', '').strip().lower() in (
+            '1', 'true', 'yes', 'on',
+        )
+        if (
+            not os.environ.get('RENDER')
+            and not os.environ.get('GITHUB_ACTIONS')
+            and not targeting_render
+        ):
             self.stdout.write(self.style.WARNING(
                 'Подсказка: сайт на Render использует БД из панели Render, не локальную SQLite/Postgres. '
-                'Без Shell: задай DATABASE_URL (External Database URL) и DJANGO_SECRET_KEY с сервиса web '
-                'и снова запусти эту команду; либо включи workflow «Render HH import» на GitHub.'
+                'Без Shell: файл .env.render + JOBFLEX_USE_RENDER_DB=1 (см. tools/run_render_import.ps1) '
+                'или секреты в GitHub Actions «Render HH import».'
             ))
         pages = max(1, int(opts['pages']))
         per_page = min(max(1, int(opts['per_page'])), 100)
