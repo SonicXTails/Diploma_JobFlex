@@ -20,6 +20,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load .env from project root (if present); silently ignored in production.
 load_dotenv(BASE_DIR / '.env')
 
+# Режим деплоя: на Render задать DEPLOY_ENV=production (или prod/render) вместе с env в render.yaml.
+# Тогда ниже подставляются осторожные дефолты только если переменная не задана явно.
+# Локально не задавать DEPLOY_ENV — останется local, поведение как раньше.
+DEPLOY_ENV = os.environ.get('DEPLOY_ENV', 'local').strip().lower()
+if DEPLOY_ENV in ('production', 'prod', 'render'):
+    os.environ.setdefault('VACANCY_FETCH_ON_STARTUP', 'false')
+    os.environ.setdefault('HH_FETCH_PAGES', '2')
+    os.environ.setdefault('HH_FETCH_PER_PAGE', '50')
+    os.environ.setdefault('HH_IMPORT_DB_AGE_PURGE_BATCH', '2000')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -73,6 +82,11 @@ HH_IMPORT_DB_AGE_PURGE_ENABLED = os.environ.get('HH_IMPORT_DB_AGE_PURGE_ENABLED'
 )
 HH_IMPORT_DB_AGE_PURGE_DAYS = int(os.environ.get('HH_IMPORT_DB_AGE_PURGE_DAYS', '7'))
 HH_IMPORT_DB_AGE_PURGE_BATCH = int(os.environ.get('HH_IMPORT_DB_AGE_PURGE_BATCH', '5000'))
+# Жёсткий лимит импортных строк (created_by пустой) в БД: обрезка через enforce_hh_import_cap.
+# На localhost по умолчанию 0 (без лимита). На Render обычно 1000.
+HH_IMPORT_TOTAL_CAP = int(os.environ.get('HH_IMPORT_TOTAL_CAP', '0'))
+# Явный лимит только для импорта HH (если > 0 — перекрывает HH_IMPORT_TOTAL_CAP при fetch_hh).
+IMPORT_CAP_VACANCIES_HH = max(0, int(os.environ.get('IMPORT_CAP_VACANCIES_HH', '0')))
 
 # ── Media files (user uploads) ───────────────────────────────────────────────
 MEDIA_URL  = '/media/'

@@ -1,6 +1,15 @@
-# Render Blueprint: https://render.com/docs/infrastructure-as-code
-# Если деплой падает на создании БД: на бесплатном плане у аккаунта только одна Free Postgres —
-# удали старую или задай другое имя ресурса в Dashboard.
+# Render Blueprint — JobFlex (web + Postgres + Cron без Celery).
+#
+# Чеклист после деплоя (Фаза 1 плана):
+# 1) Dashboard → Cron jobflex-hh-import: последний run = Success, иначе смотри Logs.
+# 2) При отсутствии Cron — создай вручную: repo main, те же build/start и env, что ниже.
+# 3) Smoke в Shell (web): python manage.py render_prod_smoke
+#
+# Фаза 5 (опционально, платно — полный паритет с localhost):
+# - Создать Key Value (Redis) на Render.
+# - Background Worker: celery -A config worker -l info
+# - Отдельный процесс или сервис: celery -A config beat -l info
+# - На web + worker выставить CELERY_BROKER_URL и CELERY_RESULT_BACKEND (internal URL Redis).
 
 databases:
   - name: jobflex-db
@@ -9,7 +18,6 @@ databases:
     plan: free
 
 services:
-  # region не указываем: после создания сервиса Render не даёт менять регион через Blueprint sync.
   - type: web
     name: jobflex
     runtime: python
@@ -20,6 +28,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: DEPLOY_ENV
+        value: production
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_SECRET_KEY
@@ -34,3 +44,78 @@ services:
         value: https://jobflex-4fh0.onrender.com
       - key: SITE_URL
         value: https://jobflex-4fh0.onrender.com
+      - key: HH_IMPORT_TOTAL_CAP
+        value: "1000"
+      - key: HH_FETCH_PAGES
+        value: "1"
+      - key: HH_FETCH_PER_PAGE
+        value: "40"
+
+  - type: cron
+    name: jobflex-hh-import
+    runtime: python
+    plan: free
+    branch: main
+    schedule: "0 7 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py fetch_hh --pages 1 --per-page 40 && python manage.py enforce_hh_import_cap
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DEPLOY_ENV
+        value: production
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobflex-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: jobflex
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DJANGO_ALLOWED_HOSTS
+        value: jobflex-4fh0.onrender.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://jobflex-4fh0.onrender.com
+      - key: SITE_URL
+        value: https://jobflex-4fh0.onrender.com
+      - key: HH_IMPORT_TOTAL_CAP
+        value: "1000"
+
+  # Раз в неделю: удаление старых HH-импортов по created_at (без запросов к api.hh.ru).
+  - type: cron
+    name: jobflex-hh-db-age-purge
+    runtime: python
+    plan: free
+    branch: main
+    schedule: "30 4 * * 0"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py purge_hh_imports_by_db_age --batch 800
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DEPLOY_ENV
+        value: production
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobflex-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: jobflex
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DJANGO_ALLOWED_HOSTS
+        value: jobflex-4fh0.onrender.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://jobflex-4fh0.onrender.com
+      - key: SITE_URL
+        value: https://jobflex-4fh0.onrender.com
+      - key: HH_IMPORT_DB_AGE_PURGE_DAYS
+        value: "7"
+      - key: HH_IMPORT_DB_AGE_PURGE_ENABLED
+        value: "true"
