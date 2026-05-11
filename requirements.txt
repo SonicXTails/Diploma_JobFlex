@@ -41,7 +41,7 @@ python-dotenv==1.2.2
 python-telegram-bot==22.6
 pytz==2025.2
 PyYAML==6.0.3
-psycopg2-binary==2.9.10
+psycopg[binary]==3.3.4
 redis==7.2.1
 referencing==0.37.0
 requests==2.32.5
