@@ -5,5 +5,11 @@ backups/*.sqlite3
 staticfiles/
 celerybeat-schedule
 celerybeat-schedule.*
+# Локальные загрузки пользователей (аватары, резюме, вложения чата)
+media/
+# HTML-дампы страниц для отладки верстки
+logs/
 # Локальные секреты Render (Postgres URL, DJANGO_SECRET_KEY) — см. .env.render.example
 .env.render
+.env
+locust_report.html
