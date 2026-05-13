@@ -624,6 +624,7 @@ function createBackup() {
     fetch('{% url "accounts:api_admin_backup_create" %}', {
         method: 'POST',
         headers: { 'X-CSRFToken': _csrfToken() },
+        credentials: 'same-origin',
     }).then(function(r){ return r.json(); }).then(function(d) {
         if (d.ok) {
             status.textContent = '✅ Бэкап создан: ' + d.filename + ' (' + d.size_kb + ' КБ)';
@@ -649,6 +650,7 @@ function restoreBackup(filename, btn) {
     fetch('{% url "accounts:api_admin_backup_restore" %}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfToken() },
+        credentials: 'same-origin',
         body: JSON.stringify({ filename: filename }),
     }).then(function(r){ return r.json(); }).then(function(d) {
         if (d.ok) {
@@ -673,6 +675,7 @@ function deleteBackup(filename, btn) {
     fetch('{% url "accounts:api_admin_backup_delete" %}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfToken() },
+        credentials: 'same-origin',
         body: JSON.stringify({ filename: filename }),
     }).then(function(r){ return r.json(); }).then(function(d) {
         if (d.ok) {

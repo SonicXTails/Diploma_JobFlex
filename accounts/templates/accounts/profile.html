@@ -247,29 +247,8 @@
                                     <option value="military_id">Военный билет</option>
                                 </select>
                             </div>
-                            <div class="p-docs__field">
-                                <label class="p-docs__label" for="doc-serial">Серия</label>
-                                <input id="doc-serial" class="p-docs__input" type="text" placeholder="Например: 1234">
-                            </div>
-                            <div class="p-docs__field">
-                                <label class="p-docs__label" for="doc-number">Номер</label>
-                                <input id="doc-number" class="p-docs__input" type="text" placeholder="Например: 567890">
-                            </div>
                         </div>
-                        <div class="p-docs__row">
-                            <div class="p-docs__field">
-                                <label class="p-docs__label" for="doc-issued-date">Дата выдачи</label>
-                                <input id="doc-issued-date" class="p-docs__input" type="date">
-                            </div>
-                            <div class="p-docs__field p-docs__field--wide">
-                                <label class="p-docs__label" for="doc-issued-by">Кем выдан</label>
-                                <input id="doc-issued-by" class="p-docs__input" type="text" placeholder="Например: ОУФМС России по г. Казани">
-                            </div>
-                            <div class="p-docs__field">
-                                <label class="p-docs__label" for="doc-division-code">Код подразделения</label>
-                                <input id="doc-division-code" class="p-docs__input" type="text" placeholder="123-456">
-                            </div>
-                        </div>
+                        <div id="doc-fields-wrap"></div>
                         <div class="p-docs__row">
                             <div class="p-docs__field p-docs__field--wide">
                                 <label class="p-docs__label" for="doc-files">Файлы документа</label>
@@ -691,7 +670,15 @@
                         <option value="F">Женский</option>
                     </select>
                 </div>
-                <div class="field" id="m-city-field"><label>Город</label><input id="m-city" type="text"></div>
+                <div class="field" id="m-city-field">
+                    <label>Город</label>
+                    <select id="m-city">
+                        <option value="">Все регионы</option>
+                        {% for city_name in city_options %}
+                            <option value="{{ city_name }}">{{ city_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="field" id="m-birth-field"><label>Дата рождения</label><input id="m-birth-date" type="date"></div>
                 <div class="field full" id="m-citizenship-field">
                     <label>Гражданство</label>
@@ -740,7 +727,7 @@
                                 <input type="text" id="m-metro-search" placeholder="Начните вводить название станции…" autocomplete="off">
                                 <div class="metro-dropdown" id="m-metro-dropdown"></div>
                             </div>
-                            <div id="m-metro-selected-badge" style="display:none"></div>
+                            <div id="m-metro-selected-badge" class="metro-selected-badge u-hidden" aria-live="polite"></div>
                         </div>
                     </div>
                     <div id="m-address-wrap" style="display:none;margin-top:10px">
@@ -1176,6 +1163,22 @@ var _mainModal = document.getElementById('modal-main');
 document.getElementById('modal-main-cancel').onclick = function(){ closeModal(_mainModal); };
 _mainModal.addEventListener('click', function(e){ if(e.target===this) closeModal(this); });
 
+function _syncCustomSelect(nativeSelect){
+    if (!nativeSelect) return;
+    var wrap = nativeSelect.parentElement;
+    if (!wrap || !wrap.classList.contains('cs-wrap')) return;
+    var valueEl = wrap.querySelector('.cs-value');
+    var items = wrap.querySelectorAll('.cs-option');
+    var selectedOpt = nativeSelect.options[nativeSelect.selectedIndex];
+    items.forEach(function(li){
+        li.classList.toggle('cs-selected', li.getAttribute('data-value') === nativeSelect.value);
+    });
+    if (valueEl && selectedOpt) {
+        valueEl.textContent = selectedOpt.textContent;
+        valueEl.classList.toggle('cs-placeholder', selectedOpt.value === '');
+    }
+}
+
 document.getElementById('main-edit-btn').addEventListener('click', function(){
     var u = STATE.user;
     document.getElementById('m-last-name').value  = u.last_name  || '';
@@ -1186,7 +1189,9 @@ document.getElementById('main-edit-btn').addEventListener('click', function(){
     document.getElementById('m-telegram').value   = u.telegram   || '';
     document.getElementById('m-phone').value       = u.phone      || '';
     document.getElementById('m-gender').value      = u.gender     || '';
-    document.getElementById('m-city').value        = u.city       || '';
+    var citySel = document.getElementById('m-city');
+    citySel.value = u.city || '';
+    _syncCustomSelect(citySel);
     document.getElementById('m-birth-date').value  = u.birth_date || '';
     document.getElementById('m-citizenship').value = u.citizenship|| '';
     document.getElementById('m-company').value     = u.company    || '';
@@ -1365,12 +1370,16 @@ function _metroRenderBadge() {
     if (!badge) return;
     if (_metroState.stationName) {
         var col = _metroState.lineColor ? '#' + _metroState.lineColor : 'var(--accent)';
-        badge.innerHTML = '<span class="ms-dot" style="background:'+col+'"></span>'
-            + esc(_metroState.stationName)
-            + (_metroState.lineName ? ' <span style="color:var(--muted);font-size:12px">('+esc(_metroState.lineName)+')</span>' : '');
-        badge.style.display = 'inline-flex';
+        badge.innerHTML =
+            '<span class="ms-dot" style="background:' + col + '"></span>' +
+            '<span class="metro-badge-station">' + esc(_metroState.stationName) + '</span>' +
+            (_metroState.lineName
+                ? '<span class="metro-badge-line">(' + esc(_metroState.lineName) + ')</span>'
+                : '');
+        badge.classList.remove('u-hidden');
     } else {
-        badge.style.display = 'none';
+        badge.innerHTML = '';
+        badge.classList.add('u-hidden');
     }
 }
 
@@ -1447,7 +1456,7 @@ function _metroSelectItem(item) {
         });
     }
     // City input → re-check if metro city changes
-    document.getElementById('m-city').addEventListener('input', function(){
+    document.getElementById('m-city').addEventListener('change', function(){
         if (_locCurrentType() === 'metro') _metroLoadAndInit();
     });
     // Expose init for modal open
@@ -2192,8 +2201,21 @@ document.getElementById('delete-btn').addEventListener('click', function(){
             if (res.status >= 200 && res.status < 300 && res.body && res.body.ok) {
                 msgEl.value = '';
                 applyState(res.body);
-                setStatus('Спасибо! Сообщение отправлено.', false);
+                if (res.body.reason === 'cooldown') {
+                    setStatus(
+                        'Спасибо! Сообщение отправлено. Следующее сообщение можно отправить через '
+                        + (res.body.remaining_days || 0) + ' дн.',
+                        false
+                    );
+                } else {
+                    setStatus('Спасибо! Сообщение отправлено.', false);
+                }
             } else {
+                if (res.body && res.body.error === 'cooldown') {
+                    applyState(res.body);
+                    setStatus((res.body && res.body.detail) || 'Следующее сообщение можно отправить через 7 дн.', false);
+                    return;
+                }
                 sendBtn.disabled = false;
                 setStatus((res.body && res.body.detail) || 'Не удалось отправить сообщение.', true);
             }
@@ -2212,14 +2234,10 @@ document.getElementById('delete-btn').addEventListener('click', function(){
     var docStatusEl = document.getElementById('doc-status');
     var docSaveBtn = document.getElementById('doc-save-btn');
     var docKindEl = document.getElementById('doc-kind');
-    var docSerialEl = document.getElementById('doc-serial');
-    var docNumberEl = document.getElementById('doc-number');
-    var docIssuedDateEl = document.getElementById('doc-issued-date');
-    var docIssuedByEl = document.getElementById('doc-issued-by');
-    var docDivisionCodeEl = document.getElementById('doc-division-code');
+    var docFieldsWrapEl = document.getElementById('doc-fields-wrap');
     var docFilesEl = document.getElementById('doc-files');
     var docFilesCaptionEl = document.getElementById('doc-files-caption');
-    if (!docListEl || !docStatusEl || !docSaveBtn || !docKindEl || !docSerialEl || !docNumberEl || !docFilesEl) return;
+    if (!docListEl || !docStatusEl || !docSaveBtn || !docKindEl || !docFilesEl || !docFieldsWrapEl) return;
 
     function setDocStatus(text, isError){
         docStatusEl.textContent = text || '';
@@ -2242,6 +2260,7 @@ document.getElementById('delete-btn').addEventListener('click', function(){
         docListEl.innerHTML = items.map(function(item){
             var serialText = item.serial ? ('Серия: <b>' + escHtml(item.serial) + '</b>') : '';
             var numText = item.number_masked ? ('Номер: <b>' + escHtml(item.number_masked) + '</b>') : '';
+            var driverCatText = item.driver_categories ? ('Категории: <b>' + escHtml(item.driver_categories) + '</b>') : '';
             var fileHtml = (item.files || []).map(function(file){
                 return '<a class="p-docs-file" href="' + escHtml(file.url) + '" target="_blank" rel="noopener">' + escHtml(file.name) + '</a>';
             }).join('');
@@ -2253,6 +2272,7 @@ document.getElementById('delete-btn').addEventListener('click', function(){
                 + '<div class="p-docs-item__meta">'
                 +   (serialText ? '<span>' + serialText + '</span>' : '')
                 +   (numText ? '<span>' + numText + '</span>' : '')
+                +   (driverCatText ? '<span>' + driverCatText + '</span>' : '')
                 +   (item.issued_date ? '<span>Дата выдачи: <b>' + escHtml(item.issued_date) + '</b></span>' : '')
                 +   (item.division_code ? '<span>Код подразделения: <b>' + escHtml(item.division_code) + '</b></span>' : '')
                 + '</div>'
@@ -2316,13 +2336,106 @@ document.getElementById('delete-btn').addEventListener('click', function(){
         docFilesCaptionEl.textContent = 'Выбрано файлов: ' + files.length;
     }
 
+    var DOC_FIELD_CONFIG = {
+        passport_rf: {
+            fields: [
+                {name: 'serial', label: 'Серия', placeholder: 'Например: 1234', required: true},
+                {name: 'number', label: 'Номер', placeholder: 'Например: 567890', required: true},
+                {name: 'issued_date', label: 'Дата выдачи', type: 'date'},
+                {name: 'issued_by', label: 'Кем выдан', placeholder: 'Например: ОУФМС России по г. Казани', wide: true},
+                {name: 'division_code', label: 'Код подразделения', placeholder: '123-456'},
+            ]
+        },
+        snils: {
+            fields: [
+                {name: 'number', label: 'Номер СНИЛС', placeholder: 'Например: 112-233-445 95', required: true},
+            ]
+        },
+        inn: {
+            fields: [
+                {name: 'number', label: 'Номер ИНН', placeholder: 'Например: 1653001809', required: true},
+            ]
+        },
+        foreign_passport: {
+            fields: [
+                {name: 'serial', label: 'Серия', placeholder: 'Например: 72', required: true},
+                {name: 'number', label: 'Номер', placeholder: 'Например: 1234567', required: true},
+                {name: 'issued_date', label: 'Дата выдачи', type: 'date'},
+                {name: 'issued_by', label: 'Кем выдан', placeholder: 'Например: МВД России', wide: true},
+            ]
+        },
+        driver_license: {
+            fields: [
+                {name: 'serial', label: 'Серия', placeholder: 'Например: 9901', required: true},
+                {name: 'number', label: 'Номер', placeholder: 'Например: 123456', required: true},
+                {name: 'driver_categories', label: 'Категории', placeholder: 'Например: B, C1E'},
+                {name: 'issued_date', label: 'Дата выдачи', type: 'date'},
+                {name: 'issued_by', label: 'Кем выдан', placeholder: 'Например: ГИБДД', wide: true},
+            ]
+        },
+        military_id: {
+            fields: [
+                {name: 'serial', label: 'Серия', placeholder: 'Например: АБ'},
+                {name: 'number', label: 'Номер', placeholder: 'Например: 123456', required: true},
+                {name: 'issued_date', label: 'Дата выдачи', type: 'date'},
+                {name: 'issued_by', label: 'Кем выдан', placeholder: 'Например: Военный комиссариат', wide: true},
+            ]
+        }
+    };
+
+    function renderDocFields(kind){
+        var cfg = DOC_FIELD_CONFIG[kind] || DOC_FIELD_CONFIG.passport_rf;
+        var fields = cfg.fields || [];
+        var html = '<div class="p-docs__row">';
+        fields.forEach(function(field, idx){
+            var isWide = !!field.wide;
+            var type = field.type || 'text';
+            var req = field.required ? ' data-required=\"1\"' : '';
+            var star = field.required ? ' *' : '';
+            html += ''
+                + '<div class="p-docs__field' + (isWide ? ' p-docs__field--wide' : '') + '">'
+                +   '<label class="p-docs__label">' + field.label + star + '</label>'
+                +   '<input class="p-docs__input" type="' + type + '"'
+                +          ' data-doc-field="' + field.name + '"'
+                +          req
+                +          ' placeholder="' + escHtml(field.placeholder || '') + '">'
+                + '</div>';
+            if ((idx + 1) % 3 === 0 && (idx + 1) < fields.length){
+                html += '</div><div class="p-docs__row">';
+            }
+        });
+        html += '</div>';
+        docFieldsWrapEl.innerHTML = html;
+    }
+
+    docKindEl.addEventListener('change', function(){
+        renderDocFields(docKindEl.value || 'passport_rf');
+    });
     docFilesEl.addEventListener('change', updateFilesCaption);
 
     docSaveBtn.addEventListener('click', function(){
-        var number = (docNumberEl.value || '').trim();
+        var kind = docKindEl.value || 'passport_rf';
+        var values = {
+            serial: '',
+            number: '',
+            driver_categories: '',
+            issued_date: '',
+            issued_by: '',
+            division_code: ''
+        };
+        var requiredField = null;
+        docFieldsWrapEl.querySelectorAll('[data-doc-field]').forEach(function(el){
+            var key = el.getAttribute('data-doc-field');
+            var val = (el.value || '').trim();
+            if (Object.prototype.hasOwnProperty.call(values, key)) values[key] = val;
+            if (!requiredField && el.getAttribute('data-required') === '1' && !val){
+                var label = el.closest('.p-docs__field') ? el.closest('.p-docs__field').querySelector('.p-docs__label') : null;
+                requiredField = label ? label.textContent.replace(/\s*\*$/, '') : 'обязательное поле';
+            }
+        });
         var files = docFilesEl.files ? Array.prototype.slice.call(docFilesEl.files) : [];
-        if (!number){
-            setDocStatus('Заполните номер документа.', true);
+        if (requiredField){
+            setDocStatus('Заполните поле: ' + requiredField + '.', true);
             return;
         }
         if (!files.length){
@@ -2331,12 +2444,13 @@ document.getElementById('delete-btn').addEventListener('click', function(){
         }
 
         var fd = new FormData();
-        fd.append('doc_type', docKindEl.value || '');
-        fd.append('serial', (docSerialEl.value || '').trim());
-        fd.append('number', number);
-        fd.append('issued_date', (docIssuedDateEl.value || '').trim());
-        fd.append('issued_by', (docIssuedByEl.value || '').trim());
-        fd.append('division_code', (docDivisionCodeEl.value || '').trim());
+        fd.append('doc_type', kind);
+        fd.append('serial', values.serial);
+        fd.append('number', values.number);
+        fd.append('driver_categories', values.driver_categories);
+        fd.append('issued_date', values.issued_date);
+        fd.append('issued_by', values.issued_by);
+        fd.append('division_code', values.division_code);
         files.forEach(function(f){ fd.append('files', f); });
 
         docSaveBtn.disabled = true;
@@ -2351,11 +2465,7 @@ document.getElementById('delete-btn').addEventListener('click', function(){
         .then(function(res){
             docSaveBtn.disabled = false;
             if (res.status >= 200 && res.status < 300 && res.body && res.body.ok){
-                docSerialEl.value = '';
-                docNumberEl.value = '';
-                docIssuedDateEl.value = '';
-                docIssuedByEl.value = '';
-                docDivisionCodeEl.value = '';
+                renderDocFields(kind);
                 docFilesEl.value = '';
                 updateFilesCaption();
                 setDocStatus('Документ добавлен.', false);
@@ -2370,6 +2480,7 @@ document.getElementById('delete-btn').addEventListener('click', function(){
         });
     });
 
+    renderDocFields(docKindEl.value || 'passport_rf');
     updateFilesCaption();
     loadDocs();
 })();

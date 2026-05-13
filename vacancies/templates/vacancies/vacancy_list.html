@@ -353,7 +353,11 @@
                             <div class="v-header">
                                 <div class="v-logo">
                                     {% if vacancy.employer_logo_url %}
-                                        <img class="company-logo" src="{{ vacancy.employer_logo_url }}" alt="Логотип {{ vacancy.company }}">
+                                        <img class="company-logo"
+                                             src="{{ vacancy.employer_logo_url }}"
+                                             alt="Логотип {{ vacancy.company }}"
+                                             onerror="this.classList.add('u-hidden'); this.nextElementSibling.classList.remove('u-hidden');">
+                                        <div class="company-placeholder u-hidden">{{ vacancy.company|default:"?"|slice:":1"|upper }}</div>
                                     {% else %}
                                         <div class="company-placeholder">{{ vacancy.company|default:"?"|slice:":1"|upper }}</div>
                                     {% endif %}
@@ -380,9 +384,6 @@
                                     <span class="badge">{{ label }}</span>
                                 {% endfor %}
                             </div>
-                            {% if vacancy.key_skills_text %}
-                                <div class="v-skills">{{ vacancy.key_skills_text }}</div>
-                            {% endif %}
                         </div>
                         <div class="v-side">
                             <div class="v-salary">
@@ -477,24 +478,30 @@
         return h;
     }
 
-    document.addEventListener('click', function(e) {
-        var card = e.target.closest('.vacancy-card');
-        if (!card) return;
-        
-        // Ищем элемент рейтинга внутри карточки
-        var el = card.querySelector('.emp-rating-ph');
-        if (!el || el.dataset.done) return; // Если уже загрузили, не повторяем
-        
+    function loadEmployerRating(el, retriesLeft) {
+        if (!el || el.dataset.done) return;
         el.dataset.done = '1';
         var hid = el.dataset.hhId;
-        
-        if (!hid) { el.innerHTML = renderStars(null); return; }
-        
+        if (!hid) {
+            el.innerHTML = renderStars(null);
+            return;
+        }
+        var retries = (typeof retriesLeft === 'number') ? retriesLeft : 6;
         fetch('/api/employer-rating/' + encodeURIComponent(hid) + '/')
             .then(function(r) { return r.json(); })
-            .then(function(d) { el.innerHTML = renderStars(d.rating); })
+            .then(function(d) {
+                if (d && d.pending && retries > 0) {
+                    el.dataset.done = '';
+                    setTimeout(function(){ loadEmployerRating(el, retries - 1); }, 1200);
+                    return;
+                }
+                el.innerHTML = renderStars(d ? d.rating : null);
+            })
             .catch(function()  { el.innerHTML = renderStars(null); });
-    });
+    }
+
+    // Load ratings immediately for all visible cards.
+    document.querySelectorAll('.emp-rating-ph').forEach(loadEmployerRating);
     </script>
 
     <script>
@@ -552,7 +559,7 @@
 
         function renderBadge(){
             if (!metroState.stationName) {
-                badge.style.display = 'none';
+                badge.classList.add('u-hidden');
                 badge.innerHTML = '';
                 return;
             }
@@ -560,6 +567,7 @@
             badge.innerHTML = '<span class="ms-dot" style="background:' + col + '"></span>'
                 + esc(metroState.stationName)
                 + (metroState.lineName ? ' <span style="color:var(--text-secondary);font-size:12px">(' + esc(metroState.lineName) + ')</span>' : '');
+            badge.classList.remove('u-hidden');
             badge.style.display = 'inline-flex';
         }
 

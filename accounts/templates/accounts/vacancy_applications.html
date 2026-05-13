@@ -44,7 +44,7 @@
                 <div class="app-avatar">
                     {{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}{{ u.last_name|slice:":1"|upper }}
                 </div>
-                <div class="app-body">
+                <div class="app-content">
                     <div class="app-name">{{ u.get_full_name|default:u.username }}</div>
                     <div class="app-meta">
                         {% if ap.city %}📍 {{ ap.city }} &nbsp;{% endif %}
@@ -183,10 +183,10 @@ document.addEventListener('click', function(e){
     document.getElementById('itv-dt').value       = '';
     document.getElementById('itv-location').value = '';
     document.getElementById('itv-notes').value    = '';
-    document.getElementById('itv-modal').style.display = 'flex';
+    document.getElementById('itv-modal').classList.remove('u-hidden');
 });
 
-function itvClose(){ document.getElementById('itv-modal').style.display = 'none'; }
+function itvClose(){ document.getElementById('itv-modal').classList.add('u-hidden'); }
 document.getElementById('itv-close').addEventListener('click', itvClose);
 document.getElementById('itv-cancel').addEventListener('click', itvClose);
 document.getElementById('itv-modal').addEventListener('click', function(e){

@@ -79,7 +79,12 @@
                 <div class="vd-hero">
                     <div class="vd-hero-top">
                         {% if employer_logo_url %}
-                            <img class="vd-logo" src="{{ employer_logo_url }}" alt="{{ vacancy.company }}" loading="lazy">
+                            <img class="vd-logo"
+                                 src="{{ employer_logo_url }}"
+                                 alt="{{ vacancy.company }}"
+                                 loading="lazy"
+                                 onerror="this.classList.add('u-hidden'); this.nextElementSibling.classList.remove('u-hidden');">
+                            <div class="vd-logo-placeholder u-hidden">{{ vacancy.company|first|upper }}</div>
                         {% else %}
                             <div class="vd-logo-placeholder">{{ vacancy.company|first|upper }}</div>
                         {% endif %}
@@ -150,7 +155,7 @@
                 <!-- Description card (lazy-loaded) -->
                 <div class="vd-card" id="desc-card">
                     <h2 class="vd-card-title">Описание вакансии</h2>
-                    <p class="vd-side-note vd-side-note--tight">
+                    <p class="vd-side-note vd-side-note--tight vd-desc-source-note">
                         {% if is_hh_source %}Источник описания: HeadHunter{% elif is_trudvsem_source %}Источник описания: Работа России{% else %}Источник описания: локальная вакансия{% endif %}
                     </p>
                     <div id="desc-body">
@@ -321,7 +326,10 @@
                     <p class="sidebar-label">Работодатель</p>
                     <div class="emp-logo-wrap">
                         {% if employer_logo_url %}
-                            <img src="{{ employer_logo_url }}" alt="{{ vacancy.company }}">
+                            <img src="{{ employer_logo_url }}"
+                                 alt="{{ vacancy.company }}"
+                                 onerror="this.classList.add('u-hidden'); this.nextElementSibling.classList.remove('u-hidden');">
+                            <div class="emp-logo-letter u-hidden">{{ vacancy.company|first|upper }}</div>
                         {% else %}
                             <div class="emp-logo-letter">{{ vacancy.company|first|upper }}</div>
                         {% endif %}
@@ -477,7 +485,8 @@
     {% if map_lat and map_lon or geocode_query %}
     /* ── 2GIS Map & routing ───────────────────────────── */
     (function(){
-        var apiKey   = '{{ dgis_api_key|escapejs }}';
+        var mapglKey    = '{{ dgis_mapgl_key|escapejs }}';
+        var catalogKey  = '{{ dgis_api_key|escapejs }}';
         var destLat, destLon;
         var fromLat = null, fromLon = null;
         var currentMap, destMarker, fromMarker, directions;
@@ -490,31 +499,44 @@
                 if (typeof mapgl !== 'undefined' && mapgl.Map) { clearInterval(_t); cb(); }
             }, 100);
         }
+        /* Directions bundle loads separately (async); carRoute() returns a Promise — must await it */
+        function whenDirectionsReady(cb, maxWaitMs) {
+            maxWaitMs = maxWaitMs || 12000;
+            var started = Date.now();
+            function tick() {
+                if (typeof mapgl !== 'undefined' && mapgl.Map && mapgl.Directions) {
+                    cb(true);
+                    return;
+                }
+                if (Date.now() - started > maxWaitMs) {
+                    cb(false);
+                    return;
+                }
+                setTimeout(tick, 80);
+            }
+            tick();
+        }
+        function routePromiseTimeout(p, ms) {
+            return Promise.race([
+                p,
+                new Promise(function(_, reject) {
+                    setTimeout(function() { reject(new Error('routing_timeout')); }, ms);
+                })
+            ]);
+        }
 
         function initMap(lat, lon) {
             destLat = lat; destLon = lon;
-            currentMap = new mapgl.Map('map', { center: [lon, lat], zoom: 14, key: apiKey });
+            currentMap = new mapgl.Map('map', { center: [lon, lat], zoom: 14, key: mapglKey });
             destMarker = new mapgl.Marker(currentMap, { coordinates: [lon, lat] });
             document.getElementById('route-panel').style.display = 'block';
-
-            /* Immediately show 2ГИС button: from=user text, to=dest coordinates */
-            if (_userLocationStr) {
-                var _link2 = document.getElementById('link-2gis');
-                _link2.href = 'https://2gis.ru/directions/points/' +
-                    encodeURIComponent(_userLocationStr) + ';' +
-                    encodeURIComponent(lon + ',' + lat);
-                _link2.style.display = 'inline-flex';
-            }
-
-            /* Try to pre-place the user's saved location as the "from" point */
-            prefillUserLocation();
 
             currentMap.on('click', function(e) {
                 setFromPoint(e.lngLat[1], e.lngLat[0]);
                 /* Reverse-geocode the click */
                 fetch('https://catalog.api.2gis.com/3.0/items/geocode?lon=' +
                       e.lngLat[0] + '&lat=' + e.lngLat[1] +
-                      '&fields=items.full_name&key=' + apiKey)
+                      '&fields=items.full_name&key=' + catalogKey)
                     .then(function(r){ return r.json(); })
                     .then(function(d){
                         var items = (d.result && d.result.items) || [];
@@ -559,7 +581,7 @@
             suggestTimer = setTimeout(function(){
                 fetch('https://catalog.api.2gis.com/3.0/items?q=' +
                       encodeURIComponent(q) +
-                      '&fields=items.point&type=building,street,adm_div&key=' + apiKey)
+                      '&fields=items.point&type=building,street,adm_div&key=' + catalogKey)
                     .then(function(r){ return r.json(); })
                     .then(function(d){
                         var items = (d.result && d.result.items) || [];
@@ -587,34 +609,6 @@
             if (e.target !== addrInput) suggestBox.style.display = 'none';
         });
 
-        /* Pre-place user's saved location as the "from" marker (no route drawn) */
-        var _userLocationStr = '{{ user_location_str|escapejs }}';
-        var _userMetroLat    = '{{ user_metro_lat|escapejs }}';
-        var _userMetroLon    = '{{ user_metro_lon|escapejs }}';
-        var _destStr         = '{{ geocode_query|escapejs }}';
-
-        function prefillUserLocation() {
-            if (!_userLocationStr) return;
-            document.getElementById('from-address').value = _userLocationStr;
-
-            if (_userMetroLat && _userMetroLon) {
-                /* Metro coordinates resolved server-side — instant */
-                setFromPoint(parseFloat(_userMetroLat), parseFloat(_userMetroLon));
-            } else {
-                /* Address: geocode via 2GIS */
-                fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
-                      encodeURIComponent(_userLocationStr) +
-                      '&fields=items.point&key=' + apiKey)
-                    .then(function(r){ return r.json(); })
-                    .then(function(gd){
-                        var items = (gd.result && gd.result.items) || [];
-                        if (items.length && items[0].point) {
-                            setFromPoint(items[0].point.lat, items[0].point.lon);
-                        }
-                    }).catch(function(){});
-            }
-        }
-
         /* Build route */
         window.buildRoute = function(){
             var btn    = document.getElementById('btn-route');
@@ -628,17 +622,18 @@
                 status.textContent = 'Ищем адрес…';
                 fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
                       encodeURIComponent(input.value.trim()) +
-                      '&fields=items.point&key=' + apiKey)
+                      '&fields=items.point&key=' + catalogKey)
                     .then(function(r){ return r.json(); })
                     .then(function(d){
                         var items = (d.result && d.result.items) || [];
                         if (items.length && items[0].point) {
                             setFromPoint(items[0].point.lat, items[0].point.lon);
                             doRoute(status);
+                            /* doRoute enables the button when carRoute finishes */
                         } else {
                             status.textContent = 'Адрес не найден.';
+                            btn.disabled = false;
                         }
-                        btn.disabled = false;
                     }).catch(function(){ status.textContent = 'Ошибка поиска.'; btn.disabled = false; });
                 return;
             }
@@ -646,15 +641,27 @@
                 status.textContent = 'Укажите точку отправления: кликните по карте или введите адрес.';
                 return;
             }
+            var btnGo = document.getElementById('btn-route');
+            if (btnGo) btnGo.disabled = true;
             doRoute(status);
         };
 
         function doRoute(status) {
+            var btnRoute = document.getElementById('btn-route');
+            var routeFailed = false;
+            function doneRouting() {
+                if (btnRoute) btnRoute.disabled = false;
+            }
+            if (btnRoute) btnRoute.disabled = true;
             status.textContent = 'Строим маршрут…';
-            /* Try to get distance/time summary */
-            fetch('https://routing.api.2gis.com/routing/7.0.0/global?key=' + apiKey, {
+
+            /* Optional distance/time (routing 7.0); do not overwrite error text from carRoute */
+            var sumCtl = new AbortController();
+            var sumTimer = setTimeout(function() { try { sumCtl.abort(); } catch (e) {} }, 12000);
+            fetch('https://routing.api.2gis.com/routing/7.0.0/global?key=' + catalogKey, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
+                signal: sumCtl.signal,
                 body: JSON.stringify({
                     points: [
                         {type:'stop', lon:fromLon, lat:fromLat},
@@ -664,27 +671,73 @@
                 })
             }).then(function(r){ return r.json(); })
               .then(function(data){
+                if (routeFailed) return;
                 var ri = data && data.result && data.result[0];
                 if (!ri) return;
                 var dist = typeof ri.length   === 'number' ? (ri.length  / 1000).toFixed(1) + ' км'  : '';
                 var dur  = typeof ri.duration === 'number' ? Math.max(1, Math.round(ri.duration / 60)) + ' мин' : '';
-                status.textContent = 'Маршрут: ' + [dist, dur].filter(Boolean).join(', ');
-              }).catch(function(){ /* summary not critical */ });
+                var line = 'Маршрут: ' + [dist, dur].filter(Boolean).join(', ');
+                if (status.textContent === 'Строим маршрут…') {
+                    status.textContent = line;
+                } else if (status.textContent.indexOf('Маршрут на карте') !== -1 && line.length > 10) {
+                    status.textContent = line + ' · ' + status.textContent;
+                }
+              }).catch(function(){ /* summary optional */ })
+              .finally(function() { clearTimeout(sumTimer); });
 
-            /* Draw route on map */
-            if (!directions) {
-                directions = new mapgl.Directions(currentMap, { directionsApiKey: apiKey });
-            } else {
-                try { directions.clear(); } catch(e){}
-            }
-            try {
-                directions.carRoute({ points: [[fromLon, fromLat], [destLon, destLat]] });
-                document.getElementById('btn-clear').style.display = 'inline-flex';
-            } catch(e) {
-                console.warn('carRoute failed', e);
-                status.textContent = 'Маршрут построен (визуализация недоступна)';
-            }
-            update2gisLink();
+            whenDirectionsReady(function(ok) {
+                if (!ok) {
+                    routeFailed = true;
+                    status.textContent = 'Модуль маршрутов не загрузился. Обновите страницу.';
+                    doneRouting();
+                    return;
+                }
+                try {
+                    if (!directions) {
+                        directions = new mapgl.Directions(currentMap, { directionsApiKey: catalogKey });
+                    } else {
+                        try { directions.clear(); } catch (e) {}
+                    }
+                } catch (e) {
+                    console.warn('Directions init failed', e);
+                    routeFailed = true;
+                    status.textContent = 'Не удалось включить маршрутизацию на карте.';
+                    doneRouting();
+                    return;
+                }
+                var pr;
+                try {
+                    pr = directions.carRoute({ points: [[fromLon, fromLat], [destLon, destLat]] });
+                } catch (e) {
+                    console.warn('carRoute sync', e);
+                    routeFailed = true;
+                    status.textContent = 'Ошибка построения маршрута.';
+                    doneRouting();
+                    return;
+                }
+                if (pr && typeof pr.then === 'function') {
+                    routePromiseTimeout(pr, 25000)
+                        .then(function() {
+                            document.getElementById('btn-clear').style.display = 'inline-flex';
+                            var cur = status.textContent;
+                            if (cur === 'Строим маршрут…') {
+                                status.textContent = 'Маршрут на карте.';
+                            } else if (cur.indexOf('Маршрут:') === 0 && cur.indexOf('на карте') === -1) {
+                                status.textContent = cur + ' Отображён на карте.';
+                            }
+                        })
+                        .catch(function(err) {
+                            console.warn('carRoute', err);
+                            routeFailed = true;
+                            status.textContent = 'Не удалось получить маршрут от 2ГИС (ключ или сеть). Откройте маршрут кнопкой «2ГИС».';
+                        })
+                        .finally(doneRouting);
+                } else {
+                    document.getElementById('btn-clear').style.display = 'inline-flex';
+                    doneRouting();
+                }
+                update2gisLink();
+            });
         }
 
         window.clearRoute = function(){
@@ -723,7 +776,7 @@
         {% elif geocode_query %}
             fetch('https://catalog.api.2gis.com/3.0/items/geocode?q=' +
                   encodeURIComponent('{{ geocode_query|escapejs }}') +
-                  '&fields=items.point&key=' + apiKey)
+                  '&fields=items.point&key=' + catalogKey)
                 .then(function(r){ return r.json(); })
                 .then(function(d){
                     var items = (d.result && d.result.items) || [];

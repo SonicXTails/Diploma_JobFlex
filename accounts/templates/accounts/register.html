@@ -22,6 +22,12 @@
     <link rel="stylesheet" href="{% static 'vacancies/css/plugins/magic/magic.css' %}">
     
     <link rel="stylesheet" href="{% static 'accounts/css/register.css' %}">
+    <style>
+        #reg-city.search-region {
+            width: 100%;
+            min-height: 44px;
+        }
+    </style>
 </head>
 <body data-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}" data-user-role="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}admin{% elif request.user.manager %}manager{% elif request.user.applicant %}applicant{% else %}user{% endif %}{% else %}guest{% endif %}">
     <header class="site-header anim-hidden">
@@ -67,7 +73,15 @@
                         </div>
                     </div>
 
-                    <div class="field"><label>Город *</label><input name="city" type="text" required placeholder="Москва"></div>
+                    <div class="field">
+                        <label>Город *</label>
+                        <select name="city" id="reg-city" class="search-region" required>
+                            <option value="">Все регионы</option>
+                            {% for city_name in city_options %}
+                                <option value="{{ city_name }}">{{ city_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
                     <div class="field">
                         <label>Дата рождения *</label>
@@ -78,22 +92,8 @@
 
                     <div class="field full">
                         <label>Гражданство *</label>
-                        <!-- hidden native select for form submission/validation -->
-                        <select name="citizenship" id="citizenship-native" required class="u-hidden">
-                            <option value="" disabled selected></option>
-                            <option value="RU">Россия</option>
-                            <option value="BY">Беларусь</option>
-                            <option value="KZ">Казахстан</option>
-                            <option value="KG">Киргизия</option>
-                            <option value="AM">Армения</option>
-                            <option value="TJ">Таджикистан</option>
-                            <option value="UZ">Узбекистан</option>
-                            <option value="UA">Украина</option>
-                            <option value="MD">Молдова</option>
-                            <option value="AZ">Азербайджан</option>
-                            <option value="TM">Туркменистан</option>
-                        </select>
-                        <!-- custom styled dropdown -->
+                        <!-- значение синхронизируется с кастомным списком (initCustomSelect) -->
+                        <input type="hidden" name="citizenship" id="citizenship-native" value="" autocomplete="off">
                         <div class="cs-wrap" id="citizenship-wrap">
                             <div class="cs-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
                                 <span class="cs-value cs-placeholder">Выберите гражданство</span>
@@ -645,8 +645,7 @@
         if (!gender) { showError('Выберите пол.'); return; }
 
         // ── Город ────────────────────────────────────
-        if (!city) { showError('Укажите город проживания.'); return; }
-        if (city.length < 2 || city.length > 100) { showError('Название города должно быть от 2 до 100 символов.'); return; }
+        if (!city) { showError('Выберите город из списка.'); return; }
 
         // ── Дата рождения ────────────────────────────
         if (!birthDate) { showError('Укажите дату рождения.'); return; }

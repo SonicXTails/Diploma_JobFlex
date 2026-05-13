@@ -13,3 +13,7 @@ logs/
 .env.render
 .env
 locust_report.html
+
+# Артефакты сборки диплома (ZIP пересобираются скриптом)
+/diploma_archives/*.zip
+/file

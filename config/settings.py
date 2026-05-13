@@ -290,8 +290,13 @@ FALLBACK_TRUDVSEM_TEXTS = os.environ.get(
     'продавец,кассир,водитель,бухгалтер,менеджер,администратор,python,аналитик,разработчик',
 )
 
-# 2GIS API key (can be overridden via environment variable)
-DGIS_API_KEY = os.environ.get('DGIS_API_KEY', '0cd687b3-98c4-463e-9f30-cf4bd2dc4c4e')
+# 2GIS keys (https://dev.2gis.com / личный кабинет):
+# - DGIS_API_KEY — Catalog (геокодинг, подсказки), Routing HTTP API, плагин Directions (directionsApiKey).
+# - DGIS_MAPGL_KEY — только JS MapGL (плитки карты). Если карта пишет «MapGL key is invalid»,
+#   выпустите отдельный ключ с доступом к MapGL и задайте DGIS_MAPGL_KEY (или включите MapGL у текущего ключа).
+_dgis_api_default = 'dcd96539-1b1f-45e2-be8f-c24a161cd47f'
+DGIS_API_KEY = os.environ.get('DGIS_API_KEY', _dgis_api_default)
+DGIS_MAPGL_KEY = os.environ.get('DGIS_MAPGL_KEY', '').strip() or DGIS_API_KEY
 
 # ── Database backups ──────────────────────────────────────────────────────────
 BACKUP_DIR = BASE_DIR / 'backups'

@@ -83,6 +83,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if errors.experience_id %}<div class="vc-error">{{ errors.experience_id }}</div>{% endif %}
                     </div>
                 </section>
 
@@ -125,6 +126,7 @@
                                 <label for="empl_shift">Вахта</label>
                             </div>
                         </div>
+                        {% if errors.employment_id %}<div class="vc-error">{{ errors.employment_id }}</div>{% endif %}
                     </div>
 
                     <div class="vc-field">
@@ -248,6 +250,7 @@
                             <div class="chip-opt"><input type="checkbox" name="wsch" id="wsfr" value="Свободный" {% if 'Свободный' in form_data.work_schedule %}checked{% endif %}><label for="wsfr">Свободный</label></div>
                             <div class="chip-opt"><input type="checkbox" name="wsch" id="wsot" value="Другое" {% if 'Другое' in form_data.work_schedule %}checked{% endif %}><label for="wsot">Другое</label></div>
                         </div>
+                        {% if errors.work_schedule %}<div class="vc-error">{{ errors.work_schedule }}</div>{% endif %}
                     </div>
 
                     <div class="vc-field">
@@ -268,6 +271,7 @@
                             <div class="chip-opt"><input type="checkbox" name="hpd" id="hneg" value="По договорённости" {% if 'По договорённости' in form_data.hours_per_day %}checked{% endif %}><label for="hneg">По договорённости</label></div>
                             <div class="chip-opt"><input type="checkbox" name="hpd" id="hot"  value="Другое" {% if 'Другое' in form_data.hours_per_day %}checked{% endif %}><label for="hot">Другое</label></div>
                         </div>
+                        {% if errors.hours_per_day %}<div class="vc-error">{{ errors.hours_per_day }}</div>{% endif %}
                     </div>
 
                     <div class="tgl-row">
@@ -290,7 +294,9 @@
                         <input type="text" name="region"
                                class="vc-input {% if errors.region %}has-error{% endif %}"
                                value="{{ form_data.region }}"
-                               placeholder="Москва, Санкт-Петербург...">
+                               placeholder="Москва, Санкт-Петербург..."
+                               pattern="[А-Яа-яЁё\\-\\s]{2,80}"
+                               title="Только русские буквы, пробел и дефис">
                         {% if errors.region %}<div class="vc-error">{{ errors.region }}</div>{% endif %}
                     </div>
 
@@ -407,6 +413,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if errors.experience_id %}<div class="vc-error">{{ errors.experience_id }}</div>{% endif %}
                     </div>
                 </section>
 
@@ -415,8 +422,9 @@
                     <h3 class="vc-section-title">Описание вакансии</h3>
 
                     <div class="vc-field">
-                        <textarea name="description" class="vc-textarea"
+                        <textarea name="description" class="vc-textarea {% if errors.description %}has-error{% endif %}"
                                   placeholder="Обязанности:&#10;—&#10;&#10;Требования:&#10;—&#10;&#10;Условия:&#10;—">{{ form_data.description }}</textarea>
+                        {% if errors.description %}<div class="vc-error">{{ errors.description }}</div>{% endif %}
                     </div>
 
                     <div class="vc-field">
@@ -428,6 +436,7 @@
                                    placeholder="Введите навык и нажмите Enter или запятую…" autocomplete="off">
                         </div>
                         <div class="skills-suggestions" id="skills-suggestions"></div>
+                        {% if errors.key_skills %}<div class="vc-error">{{ errors.key_skills }}</div>{% endif %}
                     </div>
 
                     <div class="vc-field">
@@ -539,6 +548,18 @@
             });
         }
         applyRuPhoneMask(document.getElementById('vc-contact-phone'));
+    })();
+
+    // ── Region input: Cyrillic-only guard ───────────────
+    (function(){
+        var regionInput = document.querySelector('input[name="region"]');
+        if (!regionInput) return;
+        regionInput.addEventListener('input', function(){
+            var cleaned = (this.value || '')
+                .replace(/[^А-Яа-яЁё\-\s]/g, '')
+                .replace(/\s{2,}/g, ' ');
+            if (cleaned !== this.value) this.value = cleaned;
+        });
     })();
 
     // ── Theme toggle ─────────────────────────────────────
@@ -789,7 +810,8 @@
 
     // ── 2GIS Map ─────────────────────────────────────────
     (function(){
-        const KEY='{{ dgis_api_key }}';
+        const MAPGL_KEY='{{ dgis_mapgl_key|escapejs }}';
+        const CATALOG_KEY='{{ dgis_api_key|escapejs }}';
         const latF=document.getElementById('lat-field');
         const lonF=document.getElementById('lon-field');
         const addrI=document.getElementById('address-input');
@@ -797,12 +819,12 @@
         if(!mapEl||typeof mapgl==='undefined') return;
         const iLat=parseFloat(latF.value)||55.7522;
         const iLon=parseFloat(lonF.value)||37.6156;
-        const map=new mapgl.Map('vacancy-map',{center:[iLon,iLat],zoom:latF.value?15:10,key:KEY});
+        const map=new mapgl.Map('vacancy-map',{center:[iLon,iLat],zoom:latF.value?15:10,key:MAPGL_KEY});
         const marker=new mapgl.Marker(map,{coordinates:[iLon,iLat],draggable:true});
         marker.on('dragend',function(e){ const c=e.target.getCoordinates(); lonF.value=c[0].toFixed(6); latF.value=c[1].toFixed(6); });
         addrI.addEventListener('blur',function(){
             const q=this.value.trim(); if(!q) return;
-            fetch('https://catalog.api.2gis.com/3.0/items/geocode?q='+encodeURIComponent(q)+'&fields=items.point&key='+KEY)
+            fetch('https://catalog.api.2gis.com/3.0/items/geocode?q='+encodeURIComponent(q)+'&fields=items.point&key='+CATALOG_KEY)
                 .then(r=>r.json()).then(function(d){
                     const item=d&&d.result&&d.result.items&&d.result.items[0];
                     if(item&&item.point){ const ln=item.point.lon,la=item.point.lat; lonF.value=ln.toFixed(6); latF.value=la.toFixed(6); map.setCenter([ln,la]); map.setZoom(15); marker.setCoordinates([ln,la]); }

@@ -113,16 +113,45 @@
     }
     .metro-station-item:hover, .metro-station-item.hovered { background: var(--surface-hover); }
     .metro-station-item .ms-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    /* Выбранная станция под полем поиска — выравнивание с отступом как у текста в input */
     .metro-selected-badge {
-        display: inline-flex; align-items: center; gap: 6px;
-        margin-top: 8px;
-        padding: 5px 10px;
+        display: inline-flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        margin-top: 14px;
+        margin-left: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        /* совпадает с левым отступом текста в #m-metro-search (поле с иконкой 🔍) */
+        padding: 12px 14px 12px 36px;
         background: var(--badge-bg);
-        border-radius: 20px;
-        font-size: 13px;
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        font-size: 14px;
+        line-height: 1.4;
         color: var(--text);
     }
-    .metro-selected-badge .ms-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .metro-selected-badge .ms-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 4px;
+    }
+    .metro-selected-badge .metro-badge-station {
+        font-weight: 500;
+        min-width: 0;
+        word-break: break-word;
+    }
+    .metro-selected-badge .metro-badge-line {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--muted);
+        white-space: normal;
+    }
     .metro-no-match { padding:12px; font-size:13px; color:var(--muted); text-align:center; }
 
 

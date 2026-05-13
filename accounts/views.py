@@ -3,6 +3,7 @@ import json
 import os
 import re
 import uuid
+from functools import lru_cache
 from datetime import date, timedelta
 from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
@@ -26,6 +27,24 @@ from django.http.request import RawPostDataException
 
 from .models import Applicant, Manager, Administrator, Moderator, Education, ExtraEducation, WorkExperience, Chat, Message, Application, FilterPreset, CalendarNote, Interview, UserUiPreference, ApiActionLog, UserFeedback, UserDocument, UserDocumentFile
 from .telegram import send_hello_async, get_bot_username, resolve_chat_id_by_token, notify_new_chat_message
+@lru_cache(maxsize=1)
+def _allowed_city_names():
+    """Cities allowed for manual profile/registration selection."""
+    metro_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'metro_hh.json'))
+    names = set()
+    try:
+        with open(metro_path, encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            for city in data:
+                name = str((city or {}).get('city_name') or '').strip()
+                if name:
+                    names.add(name)
+    except Exception:
+        return set()
+    return names
+
+
 
 
 # ──────────────────────────── Admin helpers ────────────────────────────────
@@ -56,6 +75,21 @@ def admin_required(view_func):
             )
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+def _drf_request_filename(request, field='filename'):
+    """Read a filename from a DRF-wrapped request without using request.body.
+
+    After the request stream is parsed into ``request.data``, accessing
+    ``request.body`` raises RawPostDataException; always use parsed data.
+    """
+    payload = getattr(request, 'data', None)
+    if not hasattr(payload, 'get'):
+        return ''
+    val = payload.get(field)
+    if val is None:
+        return ''
+    return str(val).strip()
 
 
 def is_moderator_user(user):
@@ -156,6 +190,7 @@ def register_page(request):
     return render(request, 'accounts/register.html', {
         'telegram_bot_username': bot_username,
         'today': date.today().isoformat(),
+        'city_options': sorted(_allowed_city_names()),
     })
 
 
@@ -184,7 +219,9 @@ def profile_page(request):
         return redirect('accounts:admin_panel')
     if is_moderator_user(request.user):
         return redirect('accounts:moderator_analytics')
-    return render(request, 'accounts/profile.html')
+    return render(request, 'accounts/profile.html', {
+        'city_options': sorted(_allowed_city_names()),
+    })
 
 
 @login_required
@@ -284,8 +321,9 @@ def api_register(request):
     if gender not in ('M', 'F'):
         return _register_fail('invalid_gender')
 
-    # City
-    if len(city) < 2 or len(city) > 100:
+    # City must be selected from predefined list.
+    allowed_cities = _allowed_city_names()
+    if not city or city not in allowed_cities:
         return _register_fail('invalid_city')
 
     # Birth date
@@ -883,6 +921,7 @@ def _serialize_user_document(doc):
         'serial': doc.serial,
         'number': doc.number,
         'number_masked': _mask_doc_number(doc.number),
+        'driver_categories': doc.driver_categories,
         'issued_date': doc.issued_date.isoformat() if doc.issued_date else '',
         'issued_by': doc.issued_by,
         'division_code': doc.division_code,
@@ -965,6 +1004,15 @@ def api_profile_documents(request):
     issued_by = str(request.POST.get('issued_by') or '').strip()
     issued_date_raw = str(request.POST.get('issued_date') or '').strip()
     division_code = str(request.POST.get('division_code') or '').strip()
+    driver_categories = str(request.POST.get('driver_categories') or '').strip()
+    if doc_type != UserDocument.DOC_DRIVER_LICENSE:
+        driver_categories = ''
+    if driver_categories:
+        # Keep only letters/digits/comma/slash/dash/space (examples: B, C1E, A/M, BE).
+        driver_categories = re.sub(r'[^0-9A-Za-zА-Яа-я,\-\/\s]', '', driver_categories)
+        driver_categories = re.sub(r'\s+', ' ', driver_categories).strip()
+        if len(driver_categories) > 64:
+            return JsonResponse({'error': 'invalid_driver_categories', 'detail': 'Категории ВУ слишком длинные.'}, status=400)
 
     ok, err_code, err_detail, normalized_serial, normalized_number, normalized_division = _validate_document_payload(
         doc_type,
@@ -999,6 +1047,7 @@ def api_profile_documents(request):
         doc_type=doc_type,
         serial=normalized_serial,
         number=normalized_number,
+        driver_categories=driver_categories,
         issued_date=issued_date_val,
         issued_by=issued_by,
         division_code=normalized_division,
@@ -1103,10 +1152,15 @@ def api_profile_update(request):
             if not _re2.match(r'^7[0-9]{10}$', _pd):
                 return JsonResponse({'error': 'invalid_phone'}, status=400)
         a_changed = []
+        allowed_cities = _allowed_city_names()
         for f in ('patronymic', 'telegram', 'phone', 'gender', 'city', 'citizenship',
                   'desired_position', 'github_url', 'portfolio_url'):
             if f in data:
-                setattr(applicant, f, str(data[f]).strip())
+                val = str(data[f]).strip()
+                if f == 'city':
+                    if val and val not in allowed_cities:
+                        return JsonResponse({'error': 'invalid_city'}, status=400)
+                setattr(applicant, f, val)
                 a_changed.append(f)
         if 'about_me' in data:
             applicant.about_me = str(data['about_me']).strip()
@@ -1690,6 +1744,9 @@ def vacancy_applications(request, pk):
         return redirect('vacancy-list')
     from vacancies.models import Vacancy
     vacancy = get_object_or_404(Vacancy, pk=pk)
+    if vacancy.created_by_id != request.user.pk:
+        from django.shortcuts import redirect
+        return redirect('vacancy-list')
     apps = (
         Application.objects
         .filter(vacancy=vacancy)
@@ -1851,6 +1908,8 @@ def export_applications_csv(request, pk):
     if not hasattr(request.user, 'manager'):
         return redirect('vacancy-list')
     vacancy = get_object_or_404(Vacancy, pk=pk)
+    if vacancy.created_by_id != request.user.pk:
+        return redirect('vacancy-list')
     apps = (
         Application.objects
         .filter(vacancy=vacancy)
@@ -3522,9 +3581,8 @@ def api_admin_backup_restore(request):
         )
         return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    filename = _drf_request_filename(request)
+    if not filename:
         _log_api_action(
             request,
             action='backup_restore',
@@ -3534,8 +3592,6 @@ def api_admin_backup_restore(request):
             endpoint='api_admin_backup_restore',
         )
         return JsonResponse({'error': 'invalid_json'}, status=400)
-
-    filename = (data.get('filename') or '').strip()
     # Path-traversal guard: only allow the exact backup filename format.
     if not filename or not re.fullmatch(r'db_backup_[0-9]{8}_[0-9]{6}\.sqlite3', filename):
         _log_api_action(
@@ -3633,9 +3689,8 @@ def api_admin_backup_delete(request):
         )
         return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    filename = _drf_request_filename(request)
+    if not filename:
         _log_api_action(
             request,
             action='backup_delete',
@@ -3645,8 +3700,6 @@ def api_admin_backup_delete(request):
             endpoint='api_admin_backup_delete',
         )
         return JsonResponse({'error': 'invalid_json'}, status=400)
-
-    filename = (data.get('filename') or '').strip()
     if not filename or not re.fullmatch(r'db_backup_[0-9]{8}_[0-9]{6}\.sqlite3', filename):
         _log_api_action(
             request,
@@ -5107,9 +5160,19 @@ def api_interview_schedule(request):
         )
         return JsonResponse({'error': 'forbidden'}, status=403)
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    data = {}
+    if hasattr(request, 'data') and isinstance(request.data, dict):
+        data = request.data
+    if not data and request.body:
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = {}
+    if not data and request.POST:
+        data = request.POST
+    if not isinstance(data, dict) and not hasattr(data, 'get'):
+        data = {}
+    if not data:
         _log_api_action(
             request,
             action='interview_schedule',
@@ -5311,9 +5374,19 @@ def api_interview_cancel(request):
         )
         return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    data = {}
+    if hasattr(request, 'data') and isinstance(request.data, dict):
+        data = request.data
+    if not data and request.body:
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = {}
+    if not data and request.POST:
+        data = request.POST
+    if not isinstance(data, dict) and not hasattr(data, 'get'):
+        data = {}
+    if not data:
         _log_api_action(
             request,
             action='interview_cancel',
@@ -5482,9 +5555,19 @@ def api_interview_reschedule(request):
         )
         return JsonResponse({'error': 'forbidden'}, status=403)
 
-    try:
-        data = json.loads(request.body)
-    except Exception:
+    data = {}
+    if hasattr(request, 'data') and isinstance(request.data, dict):
+        data = request.data
+    if not data and request.body:
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = {}
+    if not data and request.POST:
+        data = request.POST
+    if not isinstance(data, dict) and not hasattr(data, 'get'):
+        data = {}
+    if not data:
         _log_api_action(
             request,
             action='interview_reschedule',

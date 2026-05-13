@@ -32,7 +32,17 @@ def _parse_rating(raw) -> float | None:
 
 
 def fetch_employer_page(url: str) -> str:
-    req = Request(url, headers=hh_openapi_headers())
+    # HH employer web pages can return 423 for API-style headers.
+    # Use a browser-like UA for reliable HTML access.
+    req = Request(url, headers={
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    })
     with urlopen(req, timeout=20) as r:
         return r.read().decode('utf-8')
 

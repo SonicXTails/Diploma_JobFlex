@@ -511,6 +511,26 @@ details[open] > .adv-summary::before { transform: rotate(90deg); }
 /* Responsive */
 @media (max-width: 1100px) { .adv-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+  }
+  .container,
+  .container.container--wide {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .filters {
+    padding: 14px;
+  }
+  .header-actions .btn-link {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .theme-toggle {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
   .search-hero { flex-direction: column; align-items: stretch; }
   .search-region { flex: none; width: 100%; }
   .adv-grid { grid-template-columns: 1fr; }
@@ -520,6 +540,20 @@ details[open] > .adv-summary::before { transform: rotate(90deg); }
   .filter-quick-bar { flex-direction: column; align-items: stretch; }
   .fqb-reset { margin-left: 0; }
   .fqb-group select { min-width: unset; width: 100%; }
+  .adv-details .radio,
+  .adv-details .checkbox {
+    white-space: normal;
+    word-break: break-word;
+  }
+  .salary-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+  }
+  .salary-currency {
+    margin-left: 2px;
+  }
 }
 
 .filters-title {
@@ -1145,7 +1179,8 @@ input[type="checkbox"]:focus-visible {
 }
 
 .auth-form .field input:not([type="checkbox"]):not([type="radio"]),
-.auth-form .field select {
+.auth-form .field select,
+.auth-form .field textarea {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--card-border);
@@ -1158,13 +1193,15 @@ input[type="checkbox"]:focus-visible {
 }
 
 .auth-form .field input:focus,
-.auth-form .field select:focus {
+.auth-form .field select:focus,
+.auth-form .field textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.22);
 }
 
-.auth-form .field input::placeholder { color: var(--muted); }
+.auth-form .field input::placeholder,
+.auth-form .field textarea::placeholder { color: var(--muted); }
 
 .auth-form .field.actions {
   flex-direction: row;
@@ -1342,8 +1379,9 @@ input[type="checkbox"]:focus-visible {
   .filters-grid {
     grid-template-columns: 1fr;
   }
-  .header-inner { padding: 12px 32px; }
+  .header-inner { padding: 12px 0; }
   .logo h1 { font-size: 18px; }
+  .logo-text { font-size: 18px; }
   .fields-grid {
     grid-template-columns: 1fr;
   }

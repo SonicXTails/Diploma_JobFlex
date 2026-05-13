@@ -1,5 +1,6 @@
 import uuid
 import json
+import re
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -177,7 +178,13 @@ class VacancyListView(ListView):
 		if selected_schedules:
 			queryset = queryset.filter(schedule_id__in=selected_schedules)
 		if selected_employments:
-			queryset = queryset.filter(employment_id__in=selected_employments)
+			# HH search payloads can omit `employment` while providing
+			# `employment_form` (FULL/PART/PROJECT). Support both so
+			# "Тип занятости" remains functional on fresh imports.
+			queryset = queryset.filter(
+				Q(employment_id__in=selected_employments) |
+				Q(employment_form_id__in=selected_employments)
+			)
 		if selected_employment_forms:
 			queryset = queryset.filter(employment_form_id__in=selected_employment_forms)
 		if "internship" in selected_labels:
@@ -506,10 +513,32 @@ class VacancyListView(ListView):
 		return self._dict_options("experience", "experience_id", "experience_name")
 
 	def _schedule_options(self):
-		return self._dict_options("schedule", "schedule_id", "schedule_name")
+		options = self._dict_options("schedule", "schedule_id", "schedule_name")
+		if options:
+			return options
+		# Fallback when external source omitted schedule fields in payload.
+		return list(SCHEDULE_CHOICES)
 
 	def _employment_options(self):
-		return self._dict_options("employment", "employment_id", "employment_name", exclude_ids=("probation",))
+		options = self._dict_options("employment", "employment_id", "employment_name", exclude_ids=("probation",))
+		if options:
+			return options
+		# Fallback for newer HH payloads where `employment` may be absent,
+		# but `employment_form` is present (e.g. FULL / PART / PROJECT).
+		fallback = self._employment_form_options()
+		if not fallback:
+			return []
+		label_map = {
+			'FULL': 'Полная занятость',
+			'PART': 'Частичная занятость',
+			'PROJECT': 'Проектная занятость',
+			'VOLUNTEER': 'Волонтерство',
+			'PROBATION': 'Стажировка',
+		}
+		result = []
+		for value, name in fallback:
+			result.append((value, label_map.get(value, name)))
+		return result
 
 	def _employment_form_options(self):
 		return self._dict_options("employment_form", "employment_form_id", "employment_form_name")
@@ -565,6 +594,9 @@ class VacancyListView(ListView):
 			.distinct()
 			.order_by("schedule_name")
 		)
+		if not work_schedule_values and not schedule_name_values:
+			# Keep filter usable even when source rows have empty schedule fields.
+			schedule_name_values = [name for _, name in SCHEDULE_CHOICES]
 		merged = []
 		seen = set()
 		for value in work_schedule_values + schedule_name_values:
@@ -658,24 +690,6 @@ class VacancyDetailView(DetailView):
 			qs = qs.exclude(is_moderator_deleted=True)
 			qs = qs.filter(is_active=True)
 		return get_object_or_404(qs, external_id=external_id)
-
-	@staticmethod
-	def _resolve_metro_coords(station_id):
-		"""Look up (lat, lon) for a metro station from the cached HH JSON."""
-		import json as _json, os as _os
-		metro_path = _os.path.join(settings.BASE_DIR, 'tools', 'metro_hh.json')
-		try:
-			with open(metro_path, encoding='utf-8') as f:
-				cities = _json.load(f)
-		except (FileNotFoundError, ValueError):
-			return '', ''
-		sid = str(station_id)
-		for city in cities:
-			for line in city.get('lines', []):
-				for st in line.get('stations', []):
-					if str(st.get('id')) == sid:
-						return str(st.get('lat', '')), str(st.get('lng', ''))
-		return '', ''
 
 	@staticmethod
 	def _is_hh_source(vacancy):
@@ -978,31 +992,10 @@ class VacancyDetailView(DetailView):
 		ctx['geocode_query'] = geocode_query or ''
 		ctx['display_address'] = display_address
 		ctx['dgis_api_key'] = settings.DGIS_API_KEY
-
-		# ── User location for pre-filling the route panel ───────────────
-		user = self.request.user
-		user_location_str = ''
-		user_metro_lat = ''
-		user_metro_lon = ''
-		if user.is_authenticated and hasattr(user, 'applicant'):
-			try:
-				applicant = user.applicant
-				if applicant.location_type == 'metro' and applicant.metro_station_name:
-					city = applicant.city or ''
-					name = applicant.metro_station_name
-					user_location_str = ('ст. метро ' + name + ', ' + city).strip(', ') if city else 'ст. метро ' + name
-					station_id = applicant.metro_station_id or ''
-					if station_id:
-						user_metro_lat, user_metro_lon = self._resolve_metro_coords(station_id)
-				elif applicant.location_type == 'address' and applicant.address:
-					user_location_str = applicant.address
-			except Exception:
-				pass
-		ctx['user_location_str'] = user_location_str
-		ctx['user_metro_lat'] = user_metro_lat
-		ctx['user_metro_lon'] = user_metro_lon
+		ctx['dgis_mapgl_key'] = settings.DGIS_MAPGL_KEY
 
 		# ── Application status for logged-in users ──────────────────────
+		user = self.request.user
 		is_applicant = user.is_authenticated and hasattr(user, 'applicant')
 		ctx['is_applicant'] = is_applicant
 		ctx['user_application'] = None
@@ -1079,7 +1072,33 @@ def employer_rating_api(request, hh_id):
 		resp['Cache-Control'] = 'public, max-age=3600'
 		return resp
 
-	# No cached rating — dispatch background scraping, tell client to retry
+	# No cached rating yet: do a quick synchronous attempt first so users
+	# don't keep seeing "—" when Celery is unavailable or delayed.
+	try:
+		from .tasks import fetch_employer_rating
+		fetch_employer_rating.run(emp.pk)
+		emp.refresh_from_db(fields=['hh_rating', 'dreamjob_rating'])
+		hh_val = _positive(emp.hh_rating)
+		dj_val = _positive(emp.dreamjob_rating)
+		if hh_val and dj_val:
+			avg = round((hh_val + dj_val) / 2, 2)
+			resp = JsonResponse({'rating': f'{avg:.1f}', 'source': 'hh+dreamjob',
+			                     'hh': f'{hh_val:.1f}', 'dj': f'{dj_val:.1f}'})
+			resp['Cache-Control'] = 'public, max-age=3600'
+			return resp
+		if hh_val:
+			resp = JsonResponse({'rating': f'{hh_val:.1f}', 'source': 'hh'})
+			resp['Cache-Control'] = 'public, max-age=3600'
+			return resp
+		if dj_val:
+			resp = JsonResponse({'rating': f'{dj_val:.1f}', 'source': 'dreamjob'})
+			resp['Cache-Control'] = 'public, max-age=3600'
+			return resp
+	except Exception:
+		# Fall back to async mode below.
+		pass
+
+	# Still no rating — dispatch background scraping, tell client to retry
 	from django.core.cache import cache
 	cache_key = f'rating_inflight_{emp.pk}'
 	if not cache.get(cache_key):
@@ -1255,6 +1274,8 @@ def _parse_vacancy_post(post):
 	if not title:   errors['title']   = 'Введите название вакансии'
 	if not company: errors['company'] = 'Введите название компании'
 	if not region:  errors['region']  = 'Укажите город или регион'
+	elif not re.fullmatch(r'[А-Яа-яЁё\-\s]{2,80}', region):
+		errors['region'] = 'Город должен быть на русском (кириллица, пробел, дефис)'
 
 	salary_from = salary_to = None
 	sf_raw = post.get('salary_from', '').strip()
@@ -1288,6 +1309,10 @@ def _parse_vacancy_post(post):
 		employment_id = ''
 	if salary_currency not in _valid_cur:
 		salary_currency = 'RUR'
+	if not experience_id:
+		errors['experience_id'] = 'Укажите требуемый опыт работы'
+	if not employment_id:
+		errors['employment_id'] = 'Укажите тип занятости'
 
 	is_remote = 'is_remote' in post
 	is_hybrid = 'is_hybrid' in post
@@ -1340,13 +1365,26 @@ def _parse_vacancy_post(post):
 		lon=_safe_coord(post.get('lon')),
 		contact_phone=post.get('contact_phone', '').strip(),
 	)
+	if len(data['description']) < 30:
+		errors['description'] = 'Добавьте более подробное описание (минимум 30 символов)'
+	if not data['key_skills_text']:
+		errors['key_skills'] = 'Укажите ключевые навыки'
+	else:
+		skills_count = len([x for x in data['key_skills_text'].split(',') if x.strip()])
+		if skills_count < 2:
+			errors['key_skills'] = 'Укажите минимум 2 навыка через запятую или теги'
+	if not data['work_schedule']:
+		errors['work_schedule'] = 'Выберите график работы'
+	if not data['hours_per_day']:
+		errors['hours_per_day'] = 'Выберите рабочие часы в день'
 	# Validate contact_phone if provided
 	_cp = data.get('contact_phone', '')
-	if _cp:
-		import re as _re
-		_cp_d = _re.sub(r'\D', '', _cp)
+	if not _cp:
+		errors['contact_phone'] = 'Укажите контактный телефон'
+	else:
+		_cp_d = re.sub(r'\D', '', _cp)
 		if _cp_d.startswith('8'): _cp_d = '7' + _cp_d[1:]
-		if not _re.match(r'^7[0-9]{10}$', _cp_d):
+		if not re.match(r'^7[0-9]{10}$', _cp_d):
 			errors['contact_phone'] = 'Введите номер в формате +7 (XXX) XXX-XX-XX'
 	data.update(dict(
 		metro_station_name=post.get('metro_station_name', '').strip(),
@@ -1370,6 +1408,7 @@ def _form_ctx(extra=None):
 		currency_choices=CURRENCY_CHOICES,
 		payment_freq_choices=PAYMENT_FREQ_CHOICES,
 		dgis_api_key=getattr(_s, 'DGIS_API_KEY', ''),
+		dgis_mapgl_key=getattr(_s, 'DGIS_MAPGL_KEY', getattr(_s, 'DGIS_API_KEY', '')),
 	)
 	if extra:
 		ctx.update(extra)

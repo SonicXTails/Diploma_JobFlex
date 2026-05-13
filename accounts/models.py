@@ -494,6 +494,7 @@ class UserDocument(models.Model):
     doc_type = models.CharField('Тип документа', max_length=32, choices=DOC_TYPE_CHOICES, db_index=True)
     serial = models.CharField('Серия', max_length=32, blank=True)
     number = models.CharField('Номер', max_length=32)
+    driver_categories = models.CharField('Категории ВУ', max_length=64, blank=True)
     issued_date = models.DateField('Дата выдачи', null=True, blank=True)
     issued_by = models.CharField('Кем выдан', max_length=255, blank=True)
     division_code = models.CharField('Код подразделения', max_length=16, blank=True)

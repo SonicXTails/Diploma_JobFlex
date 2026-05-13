@@ -1,5 +1,0 @@
-pos=33589
-gost_hits=1
-http=22
-numbered_starts=1
-tail_preview=ГОСТ 19.201–78. Единая система программной документации. Техническое задание. Требования к содержанию и оформлению. Введён 1979-01-01.Федеральный закон от 27.07.2006 № 152-ФЗ «О персональных данных» (с изм. и доп.) [Электронный ресурс]. – URL: https://www.consultant.ru/document/cons_doc_LAW_61801/ – (Дата обращения: 12.03.2026).Django Documentation [Электронный ресурс] / Django Software Foundation. – URL: https://docs.djangoproject.com/en/stable/ – (Дата обращения: 28.02.2026).Django REST framework: Documentation [Электронный ресурс]. – URL: https://www.django-rest-framework.org/ – (Дата обращения: 05.03.2026).Celery Documentation [Электронный ресурс]. – URL: https://docs.celeryq.dev/en/stable/ – (Дата обращения: 10.03.2026).Redis Documentation [Электронный ресурс] / Redis Ltd. – URL: http

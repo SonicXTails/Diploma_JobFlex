@@ -5,9 +5,16 @@
         .va-optional-note { opacity: .55; font-weight: 400; text-transform: none; }
 
         .app-card {
-            background: var(--surface); border: 1.5px solid var(--card-border);
-            border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
-            display: flex; gap: 16px; align-items: flex-start;
+            background: color-mix(in srgb, var(--surface) 92%, #000 8%);
+            border: 1.5px solid var(--card-border);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) 176px;
+            gap: 16px;
+            align-items: start;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
         }
         .app-avatar {
             width: 46px; height: 46px; border-radius: 50%;
@@ -15,7 +22,7 @@
             font-weight: 700; font-size: 17px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
         }
-        .app-body { flex: 1; min-width: 0; }
+        .app-content { min-width: 0; }
         .app-name  { font-size: 15px; font-weight: 600; color: var(--text); }
         .app-meta  { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
         .app-cover {
@@ -32,7 +39,7 @@
         .app-cover::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
         .app-cover-label { font-size: 11px; font-weight: 600; color: var(--text-secondary);
                            text-transform: uppercase; letter-spacing: .05em; margin-top: 10px; margin-bottom: 0; }
-        .app-side  { flex-shrink: 0; text-align: right; width: 160px; }
+        .app-side  { text-align: right; width: 176px; justify-self: end; }
         .app-date  { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
 
         /* Status selector */
@@ -59,6 +66,7 @@
             background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
             display: flex; align-items: center; justify-content: center;
         }
+        .itv-overlay.u-hidden { display: none !important; }
         .itv-box {
             background: var(--surface); border: 1.5px solid var(--card-border);
             border-radius: 18px; width: 620px; max-width: 95vw;
@@ -98,3 +106,27 @@
                      box-shadow: 0 4px 20px rgba(0,0,0,.25);
                      animation: itv-fade-in .2s ease; }
         @keyframes itv-fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+        @media (max-width: 900px) {
+            .app-card {
+                grid-template-columns: 46px minmax(0, 1fr);
+                gap: 12px;
+                padding: 14px;
+            }
+            .app-side {
+                grid-column: 1 / -1;
+                width: 100%;
+                text-align: left;
+            }
+            .status-select {
+                max-width: 220px;
+            }
+            .app-actions {
+                margin-top: 10px;
+            }
+            .app-actions .btn,
+            .app-actions .btn-primary,
+            .app-actions .itv-open-btn {
+                max-width: 220px;
+            }
+        }
